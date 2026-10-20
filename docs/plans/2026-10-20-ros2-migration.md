@@ -125,7 +125,7 @@ package.xml 骨架（format 3）：`<buildtool_depend>ament_cmake</buildtool_dep
 - Delete: `src/Utils/quadrotor_msgs/src/`（ROS1 生成物胶水）
 
 **Step 1:** package.xml → format 3, buildtool=ament_cmake, depend=rosidl_default_generators/std_msgs/geometry_msgs, exec_depend=rosidl_default_runtime, member_of_group rosidl_interface_packages
-**Step 2:** CMakeLists.txt → `rosidl_generate_interfaces(${PROJECT_NAME} "msg/AuxCommand.msg" ... ALL_DEPS std_msgs geometry_msgs)` + `ament_export_dependencies(rosidl_default_runtime)`
+**Step 2:** CMakeLists.txt → `rosidl_generate_interfaces(${PROJECT_NAME} "msg/AuxCommand.msg" ... DEPENDENCIES std_msgs geometry_msgs nav_msgs)` + `ament_export_dependencies(rosidl_default_runtime)`
 **Step 3:** 验证：`source /opt/ros/humble/setup.bash && colcon build --packages-select quadrotor_msgs` → `Summary: 1 package finished`
 **Step 4:** Commit: `feat(ros2): convert quadrotor_msgs to rosidl interface package`
 
