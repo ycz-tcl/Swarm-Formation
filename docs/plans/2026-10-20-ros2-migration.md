@@ -54,6 +54,9 @@
 | `cv_bridge::CvImage` + `toImageMsg()` | 同名 API 存在；`out_msg.toImageMsg(msg_ptr)` |
 | latch publisher | `rclcpp::QoS(n).transient_local()` |
 
+**QoS 契约（Task 5 审查确立）**：plan_env 的订阅全部为 reliable（对齐 ROS1 TCPROS）。**Task 9/10/12 的发布者（depth/odom/cloud 等传感话题）必须用默认 reliable QoS**——DDS 中 reliable 订阅者与 best-effort 发布者不兼容（静默零投递）。勿用 `rmw_qos_profile_sensor_data`。
+**执行器契约**：GridMap 回调无内部锁（与 ROS1 单线程 spinner 等价），Task 8 的 ego_planner_node 必须用单线程 `rclcpp::spin`，不可用 MultiThreadedExecutor。
+
 ### 参数 helper（每个节点 cpp 顶部内联一份，不改共享库结构）
 
 ```cpp
