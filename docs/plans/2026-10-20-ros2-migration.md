@@ -121,7 +121,7 @@ package.xml 骨架（format 3）：`<buildtool_depend>ament_cmake</buildtool_dep
 
 **Files:**
 - Rewrite: `src/Utils/quadrotor_msgs/package.xml`, `src/Utils/quadrotor_msgs/CMakeLists.txt`
-- Keep: `src/Utils/quadrotor_msgs/msg/*.msg`（15 个，内容不动；`Header header` 字段 rosidl 兼容）
+- Keep: `src/Utils/quadrotor_msgs/msg/*.msg`（实际 13 个。已完成（6014c9e）：9 个文件的 `Header`→`std_msgs/Header`，Gains.msg `Kp/Kd/Kp_yaw/Kd_yaw`→小写，SO3Command.msg `kR/kOm`→`kr/kom`——rosidl 强制，无消费者受影响；其余内容不动）
 - Delete: `src/Utils/quadrotor_msgs/src/`（ROS1 生成物胶水）
 
 **Step 1:** package.xml → format 3, buildtool=ament_cmake, depend=rosidl_default_generators/std_msgs/geometry_msgs, exec_depend=rosidl_default_runtime, member_of_group rosidl_interface_packages
