@@ -111,7 +111,7 @@ package.xml 骨架（format 3）：`<buildtool_depend>ament_cmake</buildtool_dep
 **Files:**
 - Delete: `.catkin_workspace`, `src/CMakeLists.txt`
 - Delete: `src/uav_simulator/so3_quadrotor_simulator/`, `src/uav_simulator/so3_control/`, `src/uav_simulator/mockamap/`, `src/Utils/rviz_plugins/`
-- Delete: `src/uav_simulator/local_sensing/src/euroc.cpp`, `src/uav_simulator/local_sensing/src/pointcloud_render_node.cpp`, `src/uav_simulator/local_sensing/src/empty.cpp`（demo 未用节点，保留 pcl_render_node 路径）
+- Delete: `src/uav_simulator/local_sensing/src/euroc.cpp`, `src/uav_simulator/local_sensing/src/empty.cpp`（demo 未用节点）。保留 `src/uav_simulator/local_sensing/src/pointcloud_render_node.cpp`——`ENABLE_CUDA=false` 默认分支的 pcl_render_node 源（`pcl_render_node.cpp` 为 CUDA 变体）
 
 **Step 1:** `git rm -r` 上述文件/目录
 **Step 2:** 确认 `ls src/planner src/uav_simulator src/Utils` 只剩 14 包
@@ -215,13 +215,12 @@ package.xml 骨架（format 3）：`<buildtool_depend>ament_cmake</buildtool_dep
 
 **Files:**
 - Rewrite: `package.xml`、`CMakeLists.txt`
-- Modify: `src/pcl_render_node.cpp`
+- Modify: `src/pointcloud_render_node.cpp`（默认非 CUDA 路径的 pcl_render_node 源；CUDA 分支的 pcl_render_node.cpp 保留不动）
 
 **要点（已扫描确认）:**
-- `:6-13` message_filters（depth+camera_pose 同步）、image_transport、dynamic_reconfigure → **dynamic_reconfigure 去除**：`cfg/local_sensing_node.cfg` 中参数改为普通参数一次读取（demo 只在启动时 load camera.yaml，运行时调参非 demo 功能）
-- `:34 cv_bridge`；`:300/:312 CvImage` 构造 depth 消息
+- 迁移对象 `pointcloud_render_node.cpp` **不含** message_filters/image_transport/dynamic_reconfigure/cv_bridge——这些均为 CUDA 变体 `pcl_render_node.cpp` 的内容（`:6-13`/`:34`/`:300/:312`），该文件保留不动、默认不编译；`cfg/local_sensing_node.cfg` 与 camera.yaml（cam_fx 等）仅 CUDA 路径使用，非 CUDA 节点不读取
+- `:159-201` main：`nh.getParam`（sensing_horizon/sensing_rate/estimation_rate、`map/x_size` 等 → `.` 形式）走 helper；PointCloud2/Odometry pub/sub、`ros::Timer`、`ros::Rate` 循环按规则表
 - CUDA 分支（CMake `ENABLE_CUDA false` 默认）结构保留：else 分支（PCL 渲染）为本次迁移对象；CUDA 分支仅保持文件存在，不修改其内部（默认不编译）
-- 删除 Task 0 中未删的 euroc/pointcloud_render/empty 相关 CMake target
 
 **Step:** 转换 → `colcon build --packages-select local_sensing_node` → Commit `feat(ros2): port local_sensing pcl_render_node (dynreconf→params)`
 
