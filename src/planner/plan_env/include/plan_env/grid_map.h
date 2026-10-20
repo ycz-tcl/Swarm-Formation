@@ -3,15 +3,21 @@
 
 #include <Eigen/Eigen>
 #include <Eigen/StdVector>
+// cv_bridge 头文件名随版本不同：上游 Humble 二进制为 cv_bridge.hpp，
+// 本机 /opt/ros/humble（3.2.1）只装了旧名 cv_bridge.h（内容为 ROS2 API），两者都兼容
+#if __has_include(<cv_bridge/cv_bridge.hpp>)
+#include <cv_bridge/cv_bridge.hpp>
+#else
 #include <cv_bridge/cv_bridge.h>
-#include <geometry_msgs/PoseStamped.h>
+#endif
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <iostream>
 #include <random>
-#include <nav_msgs/Odometry.h>
+#include <nav_msgs/msg/odometry.hpp>
 #include <queue>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <tuple>
-#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/msg/marker.hpp>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -127,7 +133,7 @@ struct MappingData
   bool has_odom_, has_cloud_;
 
   // odom_depth_timeout_
-  ros::Time last_occ_update_time_;
+  rclcpp::Time last_occ_update_time_;
   bool flag_depth_odom_timeout_;
   bool flag_use_depth_fusion;
 
@@ -195,7 +201,7 @@ public:
   inline bool isKnownFree(const Eigen::Vector3i &id);
   inline bool isKnownOccupied(const Eigen::Vector3i &id);
 
-  void initMap(ros::NodeHandle &nh);
+  void initMap(const rclcpp::Node::SharedPtr &nh);
 
   void publishMap();
   void publishMapInflate(bool all_info = false);
@@ -234,17 +240,18 @@ private:
   MappingData md_;
 
   // get depth image and camera pose
-  void depthPoseCallback(const sensor_msgs::ImageConstPtr &img,
-                         const geometry_msgs::PoseStampedConstPtr &pose);
-  void extrinsicCallback(const nav_msgs::OdometryConstPtr &odom);
-  void depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav_msgs::OdometryConstPtr &odom);
-  void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &img);
-  void odomCallback(const nav_msgs::OdometryConstPtr &odom);
+  void depthPoseCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img,
+                         const geometry_msgs::msg::PoseStamped::ConstSharedPtr &pose);
+  void extrinsicCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &odom);
+  void depthOdomCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img,
+                         const nav_msgs::msg::Odometry::ConstSharedPtr &odom);
+  void cloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &img);
+  void odomCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &odom);
 
   // update occupancy by raycasting
-  void updateOccupancyCallback(const ros::TimerEvent & /*event*/);
-  void visCallback(const ros::TimerEvent & /*event*/);
-  void updateESDFCallback(const ros::TimerEvent& /*event*/);
+  void updateOccupancyCallback();
+  void visCallback();
+  void updateESDFCallback();
 
   // main update process
   void projectDepthImage();
@@ -255,27 +262,29 @@ private:
   int setCacheOccupancy(Eigen::Vector3d pos, int occ);
   Eigen::Vector3d closetPointInMap(const Eigen::Vector3d &pt, const Eigen::Vector3d &camera_pt);
 
-  // typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image,
-  // nav_msgs::Odometry> SyncPolicyImageOdom; typedef
-  // message_filters::sync_policies::ExactTime<sensor_msgs::Image,
-  // geometry_msgs::PoseStamped> SyncPolicyImagePose;
-  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry>
+  // typedef message_filters::sync_policies::ExactTime<sensor_msgs::msg::Image,
+  // nav_msgs::msg::Odometry> SyncPolicyImageOdom; typedef
+  // message_filters::sync_policies::ExactTime<sensor_msgs::msg::Image,
+  // geometry_msgs::msg::PoseStamped> SyncPolicyImagePose;
+  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, nav_msgs::msg::Odometry>
       SyncPolicyImageOdom;
-  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, geometry_msgs::PoseStamped>
+  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, geometry_msgs::msg::PoseStamped>
       SyncPolicyImagePose;
   typedef shared_ptr<message_filters::Synchronizer<SyncPolicyImagePose>> SynchronizerImagePose;
   typedef shared_ptr<message_filters::Synchronizer<SyncPolicyImageOdom>> SynchronizerImageOdom;
 
-  ros::NodeHandle node_;
-  shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> depth_sub_;
-  shared_ptr<message_filters::Subscriber<geometry_msgs::PoseStamped>> pose_sub_;
-  shared_ptr<message_filters::Subscriber<nav_msgs::Odometry>> odom_sub_;
+  rclcpp::Node::SharedPtr node_;
+  shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Image>> depth_sub_;
+  shared_ptr<message_filters::Subscriber<geometry_msgs::msg::PoseStamped>> pose_sub_;
+  shared_ptr<message_filters::Subscriber<nav_msgs::msg::Odometry>> odom_sub_;
   SynchronizerImagePose sync_image_pose_;
   SynchronizerImageOdom sync_image_odom_;
 
-  ros::Subscriber indep_cloud_sub_, indep_odom_sub_, extrinsic_sub_;
-  ros::Publisher map_pub_, map_inf_pub_, esdf_pub_;
-  ros::Timer occ_timer_, vis_timer_, esdf_timer_;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr indep_cloud_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr indep_odom_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr extrinsic_sub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_pub_, map_inf_pub_, esdf_pub_;
+  rclcpp::TimerBase::SharedPtr occ_timer_, vis_timer_, esdf_timer_;
 
   //
   uniform_real_distribution<double> rand_noise_;
