@@ -66,7 +66,7 @@ T get_param(rclcpp::Node::SharedPtr node, const std::string& name, const T& def)
 }
 ```
 
-### message_filters（pcl_render_node / grid_map）
+### message_filters（grid_map； pcl_render_node 的 CUDA 变体不改）
 
 ```cpp
 // ROS1: message_filters::Subscriber<Image> sub_(nh, topic, 50);
@@ -222,7 +222,7 @@ package.xml 骨架（format 3）：`<buildtool_depend>ament_cmake</buildtool_dep
 - `:159-201` main：`nh.getParam`（sensing_horizon/sensing_rate/estimation_rate、`map/x_size` 等 → `.` 形式）走 helper；PointCloud2/Odometry pub/sub、`ros::Timer`、`ros::Rate` 循环按规则表
 - CUDA 分支（CMake `ENABLE_CUDA false` 默认）结构保留：else 分支（PCL 渲染）为本次迁移对象；CUDA 分支仅保持文件存在，不修改其内部（默认不编译）
 
-**Step:** 转换 → `colcon build --packages-select local_sensing_node` → Commit `feat(ros2): port local_sensing pcl_render_node (dynreconf→params)`
+**Step:** 转换 → `colcon build --packages-select local_sensing_node` → Commit `feat(ros2): port local_sensing pcl_render_node (pointcloud_render_node.cpp, non-CUDA default)`
 
 ### Task 13: swarm_bridge
 
