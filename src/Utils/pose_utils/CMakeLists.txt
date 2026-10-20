@@ -8,6 +8,9 @@ add_library(${PROJECT_NAME} INTERFACE)
 target_include_directories(${PROJECT_NAME} INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
+# No Armadillo::Armadillo imported target exists (built-in FindArmadillo
+# defines variables only), so chain the found libraries directly.
+target_link_libraries(${PROJECT_NAME} INTERFACE ${ARMADILLO_LIBRARIES})
 
 install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}Targets
   ARCHIVE DESTINATION lib
