@@ -85,6 +85,10 @@ CMakeLists.txt 骨架（ament_cmake）：
 ```cmake
 cmake_minimum_required(VERSION 3.8)
 project(<pkg>)
+# 保证默认 Release（上游 catkin 用 -O3），可被 -DCMAKE_BUILD_TYPE= 覆盖
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
 set(CMAKE_CXX_STANDARD 17)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
