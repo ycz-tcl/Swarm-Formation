@@ -1,46 +1,31 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.8)
 project(swarm_graph)
 
-## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++11)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(ament_cmake REQUIRED)
+find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(rclcpp REQUIRED)
 
-find_package(catkin REQUIRED COMPONENTS
-  message_generation
-  roscpp
-  std_msgs
-  tf
-)
+# ROS1: catkin add_library(swarm_graph src/swarm_graph.cpp) — same target name kept,
+# and catkin built shared libs, so keep SHARED explicit (colcon default is static)
+add_library(${PROJECT_NAME} SHARED src/swarm_graph.cpp)
+target_include_directories(${PROJECT_NAME} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+ament_target_dependencies(${PROJECT_NAME} rclcpp)
+target_link_libraries(${PROJECT_NAME} Eigen3::Eigen)
 
-catkin_package(
-   INCLUDE_DIRS include
-   LIBRARIES swarm_graph
-   CATKIN_DEPENDS message_runtime roscpp std_msgs tf
-#  DEPENDS system_lib
-)
+install(TARGETS ${PROJECT_NAME}
+  EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
 
-###########
-## Build ##
-###########
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(eigen3_cmake_module Eigen3 rclcpp)
 
-## Specify additional locations of header files
-## Your package locations should be listed before other locations
-include_directories(
-  SYSTEM
-  include
-  ${catkin_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/include
-  ${catkin_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIR}
-)
-
-add_library(swarm_graph
-  src/swarm_graph.cpp
-)
-
-
-
-
-
-
+ament_package()

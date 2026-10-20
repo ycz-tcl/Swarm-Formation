@@ -2,8 +2,8 @@
 #define _SWARM_GRAPH_H_
 
 #include <memory>
+#include <vector>
 #include <Eigen/Eigen>
-#include <ros/ros.h>
 
 
 class SwarmGraph{

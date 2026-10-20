@@ -1,6 +1,14 @@
 #include <swarm_graph/swarm_graph.hpp>
-   
-SwarmGraph::SwarmGraph(){   
+
+#include <cmath>
+#include <iostream>
+
+#include <rclcpp/rclcpp.hpp>
+
+// ROS1 ROS_WARN macros; this library has no node, so use a named logger
+#define SG_LOG_RCLCPP (rclcpp::get_logger("swarm_graph"))
+
+SwarmGraph::SwarmGraph(){
     have_desired = false;
 }
 
@@ -11,7 +19,7 @@ bool SwarmGraph::updateGraph( const std::vector<Eigen::Vector3d> &swarm){
     
     if(nodes.size() != nodes_des.size()){
         std::cout <<"swarm size : " << nodes.size() << std::endl;
-        ROS_WARN("Size of swarm formation vector is incorrect. ");
+        RCLCPP_WARN(SG_LOG_RCLCPP, "Size of swarm formation vector is incorrect. ");
         return false;
     }
 
@@ -30,7 +38,7 @@ bool SwarmGraph::updateGraph( const std::vector<Eigen::Vector3d> &swarm){
             agent_grad.push_back(gradp);
         }
     }else{
-        ROS_WARN( "Please enter the desired formation!!" );
+        RCLCPP_WARN(SG_LOG_RCLCPP, "Please enter the desired formation!!");
     }
     
     return true;
@@ -93,7 +101,7 @@ bool SwarmGraph::calcFNorm2( double &cost ){
         cost = DLhat.cwiseAbs2().sum();
         return true;
     }else{
-        ROS_WARN( "Invalid desired formation." );
+        RCLCPP_WARN(SG_LOG_RCLCPP, "Invalid desired formation.");
         return false;
     }
 }
@@ -145,7 +153,7 @@ bool SwarmGraph::calcFGrad( Eigen::Vector3d &gradp, int idx ){
         }
         return true;
     }else{
-        ROS_WARN( "Invalid desired formation." );
+        RCLCPP_WARN(SG_LOG_RCLCPP, "Invalid desired formation.");
         return false;
     }
 }
@@ -155,7 +163,7 @@ Eigen::Vector3d SwarmGraph::getGrad(int id){
         return agent_grad[id];
     } else {
         Eigen::Vector3d grad = Eigen::Vector3d::Zero();
-        ROS_WARN("id is error !!! or desired graph has not been setup !!!");
+        RCLCPP_WARN(SG_LOG_RCLCPP, "id is error !!! or desired graph has not been setup !!!");
         return grad;
     }
     
@@ -167,7 +175,7 @@ bool SwarmGraph::getGrad(std::vector<Eigen::Vector3d> &swarm_grad){
         return true;
     }
     else{
-        ROS_WARN("desired graph has not been setup !!!");
+        RCLCPP_WARN(SG_LOG_RCLCPP, "desired graph has not been setup !!!");
         return false;
     }
 }
