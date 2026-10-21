@@ -1,12 +1,14 @@
-#include <ros/ros.h>
-#include <boost/thread.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp/serialization.hpp>
+#include <rclcpp/serialized_message.hpp>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <thread>
 #include <iostream>
-#include <nav_msgs/Odometry.h>
-#include <std_msgs/Empty.h>
-#include <traj_utils/PolyTraj.h>
+#include <nav_msgs/msg/odometry.hpp>
+#include <std_msgs/msg/empty.hpp>
+#include <traj_utils/msg/poly_traj.hpp>
 
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -18,16 +20,31 @@
 
 using namespace std;
 
+// ROS1: node_.param< T >("a/b", v, def) — ROS2: declare-then-get helper, name '/'→'.'
+template <typename T>
+T get_param(rclcpp::Node::SharedPtr node, const std::string &name, const T &def)
+{
+  T val = def;
+  if (!node->has_parameter(name))
+    node->declare_parameter<T>(name, def);
+  node->get_parameter(name, val);
+  return val;
+}
+
+rclcpp::Node::SharedPtr node_;
+
 int udp_server_fd_, udp_send_fd_;
-ros::Subscriber other_odoms_sub_, one_traj_sub_;
-ros::Publisher other_odoms_pub_, one_traj_pub_;
+rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr other_odoms_sub_;
+rclcpp::Subscription<traj_utils::msg::PolyTraj>::SharedPtr one_traj_sub_;
+rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr other_odoms_pub_;
+rclcpp::Publisher<traj_utils::msg::PolyTraj>::SharedPtr one_traj_pub_;
 string udp_ip_;
 int drone_id_;
 double odom_broadcast_freq_;
 char udp_recv_buf_[BUF_LEN], udp_send_buf_[BUF_LEN];
 struct sockaddr_in addr_udp_send_;
-nav_msgs::Odometry odom_msg_;
-traj_utils::PolyTraj polytraj_msg_;
+nav_msgs::msg::Odometry odom_msg_;
+traj_utils::msg::PolyTraj polytraj_msg_;
 
 enum MESSAGE_TYPE
 {
@@ -42,7 +59,7 @@ int init_broadcast(const char *ip, const int port)
 
   if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) <= 0)
   {
-    ROS_ERROR("[bridge_node]Socket sender creation error!");
+    RCLCPP_ERROR(node_->get_logger(), "[bridge_node]Socket sender creation error!");
     exit(EXIT_FAILURE);
   }
 
@@ -99,22 +116,28 @@ int udp_bind_to_port(const int port, int &server_fd)
   return server_fd;
 }
 
+// ROS1: ros::serialization::serialize/deserialize — ROS2: rclcpp::Serialization.
+// rmw_serialize does NOT grow the buffer, so the SerializedMessage is created
+// with the required capacity upfront (deserialize also needs buffer_length set).
 template <typename T>
 int serializeTopic(const MESSAGE_TYPE msg_type, const T &msg)
 {
   auto ptr = (uint8_t *)(udp_send_buf_);
 
-  *((MESSAGE_TYPE*)ptr) = msg_type;
+  *((MESSAGE_TYPE *)ptr) = msg_type;
   ptr += sizeof(MESSAGE_TYPE);
 
-  namespace ser = ros::serialization;
-  uint32_t msg_size = ser::serializationLength(msg);
+  rclcpp::Serialization<T> serializer;
+  // ROS1 serialized via zero-alloc stack streams; keep one buffer per sending
+  // thread instead of allocating 1MB on every message
+  static thread_local rclcpp::SerializedMessage smsg(BUF_LEN);
+  serializer.serialize_message(&msg, &smsg);
+  uint32_t msg_size = static_cast<uint32_t>(smsg.size());
 
   *((uint32_t *)ptr) = msg_size;
   ptr += sizeof(uint32_t);
 
-  ser::OStream stream(ptr, msg_size);
-  ser::serialize(stream, msg);
+  memcpy(ptr, smsg.get_rcl_serialized_message().buffer, msg_size);
 
   return msg_size + sizeof(MESSAGE_TYPE) + sizeof(uint32_t);
 }
@@ -127,19 +150,23 @@ int deserializeTopic(T &msg)
   uint32_t msg_size = *((uint32_t *)ptr);
   ptr += sizeof(uint32_t);
 
-  namespace ser = ros::serialization;
-  ser::IStream stream(ptr, msg_size);
-  ser::deserialize(stream, msg);
+  rclcpp::Serialization<T> serializer;
+  rclcpp::SerializedMessage smsg(msg_size);
+  memcpy(smsg.get_rcl_serialized_message().buffer, ptr, msg_size);
+  smsg.get_rcl_serialized_message().buffer_length = msg_size;
+  serializer.deserialize_message(&smsg, &msg);
 
   return msg_size + sizeof(MESSAGE_TYPE) + sizeof(uint32_t);
 }
 
-void odom_sub_udp_cb(const nav_msgs::OdometryPtr &msg)
+void odom_sub_udp_cb(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
 
-  static ros::Time t_last;
-  ros::Time t_now = ros::Time::now();
-  if ((t_now - t_last).toSec() * odom_broadcast_freq_ < 1.0)
+  // must match the node clock's RCL_ROS_TIME; default-constructed rclcpp::Time
+  // is RCL_SYSTEM_TIME and subtracting the two throws
+  static rclcpp::Time t_last(0, 0, RCL_ROS_TIME);
+  rclcpp::Time t_now = node_->now();
+  if ((t_now - t_last).seconds() * odom_broadcast_freq_ < 1.0)
   {
     return;
   }
@@ -151,18 +178,18 @@ void odom_sub_udp_cb(const nav_msgs::OdometryPtr &msg)
 
   if (sendto(udp_send_fd_, udp_send_buf_, len, 0, (struct sockaddr *)&addr_udp_send_, sizeof(addr_udp_send_)) <= 0)
   {
-    ROS_ERROR("UDP SEND ERROR (1)!!!");
+    RCLCPP_ERROR(node_->get_logger(), "UDP SEND ERROR (1)!!!");
   }
 }
 
-void one_traj_sub_udp_cb(const traj_utils::PolyTrajPtr &msg)
+void one_traj_sub_udp_cb(const traj_utils::msg::PolyTraj::SharedPtr msg)
 {
 
   int len = serializeTopic(MESSAGE_TYPE::ONE_TRAJ, *msg);
 
   if (sendto(udp_send_fd_, udp_send_buf_, len, 0, (struct sockaddr *)&addr_udp_send_, sizeof(addr_udp_send_)) <= 0)
   {
-    ROS_ERROR("UDP SEND ERROR (3)!!!");
+    RCLCPP_ERROR(node_->get_logger(), "UDP SEND ERROR (3)!!!");
   }
 }
 
@@ -175,7 +202,7 @@ void udp_recv_fun()
   // Connect
   if (udp_bind_to_port(UDP_PORT, udp_server_fd_) < 0)
   {
-    ROS_ERROR("[bridge_node]Socket recever creation error!");
+    RCLCPP_ERROR(node_->get_logger(), "[bridge_node]Socket recever creation error!");
     exit(EXIT_FAILURE);
   }
 
@@ -195,11 +222,11 @@ void udp_recv_fun()
     {
       if (valread == deserializeTopic(odom_msg_))
       {
-        other_odoms_pub_.publish(odom_msg_);
+        other_odoms_pub_->publish(odom_msg_);
       }
       else
       {
-        ROS_ERROR("Received message length not matches the sent one (2)!!!");
+        RCLCPP_ERROR(node_->get_logger(), "Received message length not matches the sent one (2)!!!");
         continue;
       }
 
@@ -211,11 +238,11 @@ void udp_recv_fun()
 
       if (valread == deserializeTopic(polytraj_msg_))
       {
-        one_traj_pub_.publish(polytraj_msg_);
+        one_traj_pub_->publish(polytraj_msg_);
       }
       else
       {
-        ROS_ERROR("Received message length not matches the sent one (3)!!!");
+        RCLCPP_ERROR(node_->get_logger(), "Received message length not matches the sent one (3)!!!");
         continue;
       }
 
@@ -224,7 +251,7 @@ void udp_recv_fun()
 
     default:
 
-      ROS_ERROR("Unknown received message type???");
+      RCLCPP_ERROR(node_->get_logger(), "Unknown received message type???");
 
       break;
     }
@@ -233,35 +260,38 @@ void udp_recv_fun()
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "swarm_bridge");
-  ros::NodeHandle nh("~");
+  rclcpp::init(argc, argv);
+  rclcpp::Node::SharedPtr nh = rclcpp::Node::make_shared("swarm_bridge");
+  node_ = nh;
 
-  nh.param("broadcast_ip", udp_ip_, string("127.0.0.255"));
-  nh.param("drone_id", drone_id_, -1);
-  nh.param("odom_max_freq", odom_broadcast_freq_, 1000.0);
+  udp_ip_ = get_param(nh, "broadcast_ip", string("127.0.0.255"));
+  drone_id_ = get_param(nh, "drone_id", -1);
+  odom_broadcast_freq_ = get_param(nh, "odom_max_freq", 1000.0);
 
   if (drone_id_ == -1)
   {
-    ROS_WARN("[swarm bridge] Wrong drone_id!");
+    RCLCPP_WARN(nh->get_logger(), "[swarm bridge] Wrong drone_id!");
     exit(EXIT_FAILURE);
   }
 
-  other_odoms_sub_ = nh.subscribe("my_odom", 10, odom_sub_udp_cb, ros::TransportHints().tcpNoDelay());
-  other_odoms_pub_ = nh.advertise<nav_msgs::Odometry>("/others_odom", 10);
+  // ROS1: TransportHints().tcpNoDelay() — TCPROS-only concept, no ROS2 equivalent
+  other_odoms_sub_ = nh->create_subscription<nav_msgs::msg::Odometry>("my_odom", 10, odom_sub_udp_cb);
+  other_odoms_pub_ = nh->create_publisher<nav_msgs::msg::Odometry>("/others_odom", 10);
 
-  one_traj_sub_ = nh.subscribe("/broadcast_traj_from_planner", 100, one_traj_sub_udp_cb, ros::TransportHints().tcpNoDelay());
-  one_traj_pub_ = nh.advertise<traj_utils::PolyTraj>("/broadcast_traj_to_planner", 100);
+  one_traj_sub_ = nh->create_subscription<traj_utils::msg::PolyTraj>("/broadcast_traj_from_planner", 100, one_traj_sub_udp_cb);
+  one_traj_pub_ = nh->create_publisher<traj_utils::msg::PolyTraj>("/broadcast_traj_to_planner", 100);
 
-  boost::thread udp_recv_thd(udp_recv_fun);
+  std::thread udp_recv_thd(udp_recv_fun);
   udp_recv_thd.detach();
-  ros::Duration(0.1).sleep();
+  rclcpp::sleep_for(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(0.1)));
 
   // UDP connect
   udp_send_fd_ = init_broadcast(udp_ip_.c_str(), UDP_PORT);
 
   cout << "[rosmsg_tcp_bridge] start running" << endl;
 
-  ros::spin();
+  rclcpp::spin(nh);
+  rclcpp::shutdown();
 
   close(udp_server_fd_);
   close(udp_send_fd_);
