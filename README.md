@@ -41,28 +41,28 @@ If our source code is used in your academic projects, please cite our paper. Tha
 Video Links: [Bilibili](https://www.bilibili.com/video/BV1qv41137Si?spm_id_from=333.999.0.0) (only for Mainland China) or [Youtube](https://www.youtube.com/watch?v=lFumt0rJci4).
 
 ## 2. Quick Start within 3 Minutes
-Compiling tests passed on ubuntu 18.04 and 20.04 with ros installed. You can just execute the following commands one by one.
+Compiling tests passed on ubuntu 22.04 with ROS 2 Humble installed. You can just execute the following commands one by one.
 ```
 sudo apt-get install libarmadillo-dev
 git clone https://github.com/ZJU-FAST-Lab/Swarm-Formation.git
 cd Swarm-Formation
-catkin_make -j1
-source devel/setup.bash
-roslaunch ego_planner rviz.launch
+colcon build
+source install/setup.bash
+ros2 launch ego_planner rviz.launch.py
 ```
 Then open a new command window in the same workspace and execute the following commands one by one.
 ```
-source devel/setup.bash
-roslaunch ego_planner normal_hexagon.launch
+source install/setup.bash
+ros2 launch ego_planner normal_hexagon.launch.py
 ```
-Then use **"2D Nav Goal"** in rviz to publish the goal for swarm formation navigation. You need to specify the value of **flight_type** in run_in_sim.launch:
+Then use **"2D Goal Pose"** in rviz2 (remapped to the `/goal` topic) to publish the goal for swarm formation navigation. You need to specify the value of **flight_type** in run_in_sim.launch.py:
 <p align = "center">
 <img src="fig/set_goal_normal_hexagon.gif" width = "800" height = "363" border="2" />
 </p>
 
 **Now only two forms are supported to specify the target point.**
 - flight_type = 2: use global waypoints
-- flight_type = 3: use "2D Nav Goal" to select goal  
+- flight_type = 3: use "2D Goal Pose" to select goal  
 
 Finally, you can see a normal hexagon formation navigating in random forest map.
 
@@ -72,7 +72,7 @@ Finally, you can see a normal hexagon formation navigating in random forest map.
 
 If you find this work useful or interesting, please kindly give us a star :star:, thanks!:grinning:
 ### 2.1 Quick Start with Docker
-If your operating system doesn't support ROS noetic, docker is a great alternative.
+If your operating system doesn't support ROS 2 Humble, docker is a great alternative.
 
 First of all, you have to build the project and create an image like so:
 ```bash
@@ -88,32 +88,19 @@ make docker_run
 Then execute the following command;
 
 ```
-roslaunch ego_planner normal_hexagon.launch
+ros2 launch ego_planner normal_hexagon.launch.py
 ```
 
 ## 3. Tips
-1. We recommend developers to use **[rosmon](http://wiki.ros.org/rosmon)** to replace the **roslaunch**
-- **Why we use rosmon?** : 
-  It is very developer-friendly, especially for the development of multi-robots. 
-- **How to use rosmon?** :
-  [Install](http://wiki.ros.org/rosmon):
+1. Besides rviz2, the goal can also be sent from the command line with **flight_type = 3**:
   ```
-  sudo apt install ros-${ROS_DISTRO}-rosmon
-  source /opt/ros/${ROS_DISTRO}/setup.bash # Needed to use the 'mon launch' shortcut
+  source install/setup.bash
+  ros2 topic pub -1 /goal geometry_msgs/msg/PoseStamped "{header: {frame_id: 'world'}, pose: {position: {x: 0.0, y: 0.0, z: 1.0}, orientation: {w: 1.0}}}"
   ```
-  Run the simple example of our project:
+2. The workspace is built with **colcon**, and the CMake build type defaults to Release. A specific build type can still be set with:
   ```
-  source devel/setup.bash
-  roslaunch ego_planner rviz.launch
+  colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
   ```
-  Then open a new command window in the same workspace and use **rosmon**:
-  ```
-  source devel/setup.bash
-  mon launch ego_planner normal_hexagon.launch
-  ```
-  <p align = "center">
-  <img src="fig/rosmon.jpg" width = "566" height = "379" border="2" />
-  </p>
 
 ## 4. Important updates
 - **May 9, 2022** -Add Interface: Publish target points through "2D Nav Goal" in rviz for swarm formation navigation.

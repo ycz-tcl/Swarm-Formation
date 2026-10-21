@@ -1,3 +1,13 @@
+# Build the workspace with colcon
+.PHONY : build
+build:
+	colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+# Clean the colcon build artifacts
+.PHONY : clean
+clean:
+	rm -rf build install log
+
 # Build docker project
 .PHONY : docker_build
 docker_build:
