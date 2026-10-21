@@ -1,4 +1,12 @@
 #include "path_searching/dyn_a_star.h"
+#include <chrono>
+
+// ROS1 ros::Time profiling replaced with std::chrono (non-functional change)
+using Clock = std::chrono::steady_clock;
+inline double elapsedSec(const Clock::time_point &t1, const Clock::time_point &t2)
+{
+    return std::chrono::duration<double>(t2 - t1).count();
+}
 
 using namespace std;
 using namespace Eigen;
@@ -120,7 +128,7 @@ bool AStar::ConvertToIndexAndAdjustStartEndPoints(Vector3d start_pt, Vector3d en
 
 bool AStar::AstarSearch(const double step_size, Vector3d start_pt, Vector3d end_pt, bool use_esdf_check)
 {
-    ros::Time time_1 = ros::Time::now();
+    Clock::time_point time_1 = Clock::now();
     ++rounds_;
     
     step_size_ = step_size;
@@ -130,7 +138,7 @@ bool AStar::AstarSearch(const double step_size, Vector3d start_pt, Vector3d end_
     Vector3i start_idx, end_idx;
     if (!ConvertToIndexAndAdjustStartEndPoints(start_pt, end_pt, start_idx, end_idx))
     {
-        ROS_ERROR("Unable to handle the initial or end point, force return!");
+        RCLCPP_ERROR(PATH_SEARCHING_LOGGER, "Unable to handle the initial or end point, force return!");
         return false;
     }
 
@@ -170,8 +178,8 @@ bool AStar::AstarSearch(const double step_size, Vector3d start_pt, Vector3d end_
 
         if (current->index(0) == endPtr->index(0) && current->index(1) == endPtr->index(1) && current->index(2) == endPtr->index(2))
         {
-            ros::Time time_2 = ros::Time::now();
-            printf("\033[34mA star iter:%d, time:%.3f\033[0m\n",num_iter, (time_2 - time_1).toSec()*1000);
+            Clock::time_point time_2 = Clock::now();
+            printf("\033[34mA star iter:%d, time:%.3f\033[0m\n",num_iter, elapsedSec(time_1, time_2)*1000);
             // if((time_2 - time_1).toSec() > 0.1)
             //     ROS_WARN("Time consume in A star path finding is %f", (time_2 - time_1).toSec() );
             gridPath_ = retrievePath(current);
@@ -235,18 +243,18 @@ bool AStar::AstarSearch(const double step_size, Vector3d start_pt, Vector3d end_
                         neighborPtr->fScore = tentative_gScore + getHeu(neighborPtr, endPtr);
                     }
                 }
-        ros::Time time_2 = ros::Time::now();
-        if ((time_2 - time_1).toSec() > 0.2)
+        Clock::time_point time_2 = Clock::now();
+        if (elapsedSec(time_1, time_2) > 0.2)
         {
-            ROS_WARN("Failed in A star path searching !!! 0.2 seconds time limit exceeded.");
+            RCLCPP_WARN(PATH_SEARCHING_LOGGER, "Failed in A star path searching !!! 0.2 seconds time limit exceeded.");
             return false;
         }
     }
 
-    ros::Time time_2 = ros::Time::now();
+    Clock::time_point time_2 = Clock::now();
 
-    if ((time_2 - time_1).toSec() > 0.1)
-        ROS_WARN("Time consume in A star path finding is %.3fs, iter=%d", (time_2 - time_1).toSec(), num_iter);
+    if (elapsedSec(time_1, time_2) > 0.1)
+        RCLCPP_WARN(PATH_SEARCHING_LOGGER, "Time consume in A star path finding is %.3fs, iter=%d", elapsedSec(time_1, time_2), num_iter);
 
     return false;
 }
@@ -270,7 +278,7 @@ vector<Vector3d> AStar::astarSearchAndGetSimplePath(const double step_size, Vect
 
     // I don't know why, but only try A* again
     if ((path[0]-start_pt).norm() > 0.5){
-        ROS_WARN("I don't know why, but only try A* again");
+        RCLCPP_WARN(PATH_SEARCHING_LOGGER, "I don't know why, but only try A* again");
         AstarSearch(step_size, start_pt, end_pt, false);
         path = getPath();
     }
@@ -279,7 +287,7 @@ vector<Vector3d> AStar::astarSearchAndGetSimplePath(const double step_size, Vect
     vector<Vector3d> simple_path;
     int size = path.size();
     if (size <= 2){
-        ROS_WARN("the path only have two points");
+        RCLCPP_WARN(PATH_SEARCHING_LOGGER, "the path only have two points");
         return path;
     }
         
