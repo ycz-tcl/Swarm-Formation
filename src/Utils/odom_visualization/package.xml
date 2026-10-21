@@ -1,4 +1,6 @@
-<package>
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <version>0.0.0</version>
   <name>odom_visualization</name>
   <description>
@@ -8,24 +10,23 @@
   </description>
   <maintainer email="eeshaojie@todo.todo">Shaojie Shen</maintainer>
   <license>BSD</license>
-  <url>http://ros.org/wiki/odom_visualization</url>
+  <url type="website">http://ros.org/wiki/odom_visualization</url>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <build_depend>roscpp</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>nav_msgs</build_depend>
-  <build_depend>visualization_msgs</build_depend>
-  <build_depend>tf</build_depend>
-  <build_depend>pose_utils</build_depend>
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>quadrotor_msgs</depend>
+  <depend>pose_utils</depend>
+  <depend>armadillo</depend>
 
-  <run_depend>roscpp</run_depend>
-  <run_depend>sensor_msgs</run_depend>
-  <run_depend>nav_msgs</run_depend>
-  <run_depend>visualization_msgs</run_depend>
-  <run_depend>tf</run_depend>
-  <run_depend>pose_utils</run_depend>
-
+  <export>
+    <!-- Other tools can request additional information to be placed here -->
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>
-
-

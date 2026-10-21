@@ -1,19 +1,33 @@
 #include <iostream>
 #include <string>
-#include "ros/ros.h"
-#include "tf/transform_broadcaster.h"
-#include "nav_msgs/Odometry.h"
-#include "geometry_msgs/PoseWithCovarianceStamped.h"
-#include "geometry_msgs/PoseStamped.h"
-#include "nav_msgs/Path.h"
-#include "sensor_msgs/Range.h"
-#include "visualization_msgs/Marker.h"
+#include "rclcpp/rclcpp.hpp"
+#include "tf2_ros/transform_broadcaster.h"
+#include "nav_msgs/msg/odometry.hpp"
+#include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "nav_msgs/msg/path.hpp"
+#include "sensor_msgs/msg/range.hpp"
+#include "visualization_msgs/msg/marker.hpp"
+#include "std_msgs/msg/color_rgba.hpp"
 #include "armadillo"
 #include "pose_utils.h"
-#include "quadrotor_msgs/PositionCommand.h"
+#include "quadrotor_msgs/msg/position_command.hpp"
 
 using namespace arma;
 using namespace std;
+
+// ROS1: node_.param< T >("a/b", v, def) — ROS2: declare-then-get helper, name '/'→'.'
+template <typename T>
+T get_param(rclcpp::Node::SharedPtr node, const std::string &name, const T &def)
+{
+  T val = def;
+  if (!node->has_parameter(name))
+    node->declare_parameter<T>(name, def);
+  node->get_parameter(name, val);
+  return val;
+}
+
+rclcpp::Node::SharedPtr node_;
 
 static  string mesh_resource;
 static double color_r, color_g, color_b, color_a, cov_scale, scale;
@@ -26,34 +40,34 @@ bool   cov_color  = false;
 bool   origin       = false;
 bool   isOriginSet  = false;
 colvec poseOrigin(6);
-ros::Publisher posePub;
-ros::Publisher pathPub;
-ros::Publisher velPub;
-ros::Publisher covPub;
-ros::Publisher covVelPub;
-ros::Publisher trajPub;
-ros::Publisher sensorPub;
-ros::Publisher meshPub;
-ros::Publisher heightPub;
-tf::TransformBroadcaster* broadcaster;
-geometry_msgs::PoseStamped poseROS;
-nav_msgs::Path             pathROS;
-visualization_msgs::Marker velROS;
-visualization_msgs::Marker covROS;
-visualization_msgs::Marker covVelROS;
-visualization_msgs::Marker trajROS;
-visualization_msgs::Marker sensorROS;
-visualization_msgs::Marker meshROS;
-sensor_msgs::Range         heightROS;
+rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr posePub;
+rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pathPub;
+rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr velPub;
+rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr covPub;
+rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr covVelPub;
+rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr trajPub;
+rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr sensorPub;
+rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr meshPub;
+rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr heightPub;
+tf2_ros::TransformBroadcaster* broadcaster;
+geometry_msgs::msg::PoseStamped poseROS;
+nav_msgs::msg::Path             pathROS;
+visualization_msgs::msg::Marker velROS;
+visualization_msgs::msg::Marker covROS;
+visualization_msgs::msg::Marker covVelROS;
+visualization_msgs::msg::Marker trajROS;
+visualization_msgs::msg::Marker sensorROS;
+visualization_msgs::msg::Marker meshROS;
+sensor_msgs::msg::Range         heightROS;
 string _frame_id;
 int _drone_id;
 
-void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
+void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
   if (msg->header.frame_id == string("null"))
     return;
 
-  colvec pose(6);  
+  colvec pose(6);
   pose(0) = msg->pose.pose.position.x;
   pose(1) = msg->pose.pose.position.y;
   pose(2) = msg->pose.pose.position.z;
@@ -68,8 +82,8 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
 
   vel(0) = msg->twist.twist.linear.x;
   vel(1) = msg->twist.twist.linear.y;
-  vel(2) = msg->twist.twist.linear.z;  
-  
+  vel(2) = msg->twist.twist.linear.z;
+
   if (origin && !isOriginSet)
   {
     isOriginSet = true;
@@ -77,9 +91,9 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   }
   if (origin)
   {
-    vel  = trans(ypr_to_R(pose.rows(3,5))) * vel;  
+    vel  = trans(ypr_to_R(pose.rows(3,5))) * vel;
     pose = pose_update(pose_inverse(poseOrigin), pose);
-    vel  = ypr_to_R(pose.rows(3,5)) * vel;  
+    vel  = ypr_to_R(pose.rows(3,5)) * vel;
   }
 
   // Pose
@@ -93,45 +107,45 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   poseROS.pose.orientation.w = q(0);
   poseROS.pose.orientation.x = q(1);
   poseROS.pose.orientation.y = q(2);
-  poseROS.pose.orientation.z = q(3);      
-  posePub.publish(poseROS);
-  
+  poseROS.pose.orientation.z = q(3);
+  posePub->publish(poseROS);
+
   // Velocity
   colvec yprVel(3);
   yprVel(0) =  atan2(vel(1), vel(0));
   yprVel(1) = -atan2(vel(2), norm(vel.rows(0,1),2));
   yprVel(2) = 0;
-  q = R_to_quaternion(ypr_to_R(yprVel));    
+  q = R_to_quaternion(ypr_to_R(yprVel));
   velROS.header.frame_id = string("world");
   velROS.header.stamp = msg->header.stamp;
   velROS.ns = string("velocity");
   velROS.id = 0;
-  velROS.type = visualization_msgs::Marker::ARROW;
-  velROS.action = visualization_msgs::Marker::ADD;
+  velROS.type = visualization_msgs::msg::Marker::ARROW;
+  velROS.action = visualization_msgs::msg::Marker::ADD;
   velROS.pose.position.x = pose(0);
   velROS.pose.position.y = pose(1);
   velROS.pose.position.z = pose(2);
   velROS.pose.orientation.w = q(0);
   velROS.pose.orientation.x = q(1);
   velROS.pose.orientation.y = q(2);
-  velROS.pose.orientation.z = q(3);      
-  velROS.scale.x = norm(vel, 2); 
+  velROS.pose.orientation.z = q(3);
+  velROS.scale.x = norm(vel, 2);
   velROS.scale.y = 0.05;
   velROS.scale.z = 0.05;
   velROS.color.a = 1.0;
   velROS.color.r = color_r;
   velROS.color.g = color_g;
   velROS.color.b = color_b;
-  velPub.publish(velROS);
+  velPub->publish(velROS);
 
   // Path
-  static ros::Time prevt = msg->header.stamp;
-  if ((msg->header.stamp - prevt).toSec() > 0.1)
+  static rclcpp::Time prevt = rclcpp::Time(msg->header.stamp);
+  if ((rclcpp::Time(msg->header.stamp) - prevt).seconds() > 0.1)
   {
-    prevt = msg->header.stamp;
+    prevt = rclcpp::Time(msg->header.stamp);
     pathROS.header = poseROS.header;
     pathROS.poses.push_back(poseROS);
-    pathPub.publish(pathROS);
+    pathPub->publish(pathROS);
   }
 
   // Covariance color
@@ -147,7 +161,7 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
     g = V;
     b = L;
   }
-  
+
   // Covariance Position
   if (cov_pos)
   {
@@ -175,8 +189,8 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
     covROS.header.stamp = msg->header.stamp;
     covROS.ns = string("covariance");
     covROS.id = 0;
-    covROS.type = visualization_msgs::Marker::SPHERE;
-    covROS.action = visualization_msgs::Marker::ADD;
+    covROS.type = visualization_msgs::msg::Marker::SPHERE;
+    covROS.action = visualization_msgs::msg::Marker::ADD;
     covROS.pose.position.x = pose(0);
     covROS.pose.position.y = pose(1);
     covROS.pose.position.z = pose(2);
@@ -184,7 +198,7 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
     covROS.pose.orientation.w = q(0);
     covROS.pose.orientation.x = q(1);
     covROS.pose.orientation.y = q(2);
-    covROS.pose.orientation.z = q(3);      
+    covROS.pose.orientation.z = q(3);
     covROS.scale.x = sqrt(eigVal(0))*cov_scale;
     covROS.scale.y = sqrt(eigVal(1))*cov_scale;
     covROS.scale.z = sqrt(eigVal(2))*cov_scale;
@@ -192,7 +206,7 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
     covROS.color.r = r * 0.5;
     covROS.color.g = g * 0.5;
     covROS.color.b = b * 0.5;
-    covPub.publish(covROS);
+    covPub->publish(covROS);
   }
 
   // Covariance Velocity
@@ -224,8 +238,8 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
     covVelROS.header.stamp = msg->header.stamp;
     covVelROS.ns = string("covariance_velocity");
     covVelROS.id = 0;
-    covVelROS.type = visualization_msgs::Marker::SPHERE;
-    covVelROS.action = visualization_msgs::Marker::ADD;
+    covVelROS.type = visualization_msgs::msg::Marker::SPHERE;
+    covVelROS.action = visualization_msgs::msg::Marker::ADD;
     covVelROS.pose.position.x = pose(0);
     covVelROS.pose.position.y = pose(1);
     covVelROS.pose.position.z = pose(2);
@@ -233,7 +247,7 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
     covVelROS.pose.orientation.w = q(0);
     covVelROS.pose.orientation.x = q(1);
     covVelROS.pose.orientation.y = q(2);
-    covVelROS.pose.orientation.z = q(3);      
+    covVelROS.pose.orientation.z = q(3);
     covVelROS.scale.x = sqrt(eigVal(0))*cov_scale;
     covVelROS.scale.y = sqrt(eigVal(1))*cov_scale;
     covVelROS.scale.z = sqrt(eigVal(2))*cov_scale;
@@ -241,26 +255,26 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
     covVelROS.color.r = r;
     covVelROS.color.g = g;
     covVelROS.color.b = b;
-    covVelPub.publish(covVelROS);
+    covVelPub->publish(covVelROS);
   }
 
   // Color Coded Trajectory
   static colvec ppose = pose;
-  static ros::Time pt = msg->header.stamp;
-  ros::Time t = msg->header.stamp;
-  if ((t - pt).toSec() > 0.5)
+  static rclcpp::Time pt = rclcpp::Time(msg->header.stamp);
+  rclcpp::Time t = rclcpp::Time(msg->header.stamp);
+  if ((t - pt).seconds() > 0.5)
   {
     trajROS.header.frame_id = string("world");
-    trajROS.header.stamp    = ros::Time::now();
+    trajROS.header.stamp    = node_->now();
     trajROS.ns              = string("trajectory");
-    trajROS.type            = visualization_msgs::Marker::LINE_LIST;
-    trajROS.action          = visualization_msgs::Marker::ADD;  
+    trajROS.type            = visualization_msgs::msg::Marker::LINE_LIST;
+    trajROS.action          = visualization_msgs::msg::Marker::ADD;
     trajROS.pose.position.x    = 0;
     trajROS.pose.position.y    = 0;
-    trajROS.pose.position.z    = 0;  
-    trajROS.pose.orientation.w = 1;  
-    trajROS.pose.orientation.x = 0;  
-    trajROS.pose.orientation.y = 0;  
+    trajROS.pose.position.z    = 0;
+    trajROS.pose.orientation.w = 1;
+    trajROS.pose.orientation.x = 0;
+    trajROS.pose.orientation.y = 0;
     trajROS.pose.orientation.z = 0;
     trajROS.scale.x = 0.1;
     trajROS.scale.y = 0;
@@ -268,17 +282,17 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
     trajROS.color.r = 0.0;
     trajROS.color.g = 1.0;
     trajROS.color.b = 0.0;
-    trajROS.color.a = 0.8;  
-    geometry_msgs::Point p;          
+    trajROS.color.a = 0.8;
+    geometry_msgs::msg::Point p;
     p.x = ppose(0);
     p.y = ppose(1);
     p.z = ppose(2);
-    trajROS.points.push_back(p);   
+    trajROS.points.push_back(p);
     p.x = pose(0);
     p.y = pose(1);
     p.z = pose(2);
-    trajROS.points.push_back(p);    
-    std_msgs::ColorRGBA color;
+    trajROS.points.push_back(p);
+    std_msgs::msg::ColorRGBA color;
     color.r = r;
     color.g = g;
     color.b = b;
@@ -287,22 +301,22 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
     trajROS.colors.push_back(color);
     ppose = pose;
     pt = t;
-    trajPub.publish(trajROS);
+    trajPub->publish(trajROS);
   }
 
   // Sensor availability
   sensorROS.header.frame_id = string("world");
   sensorROS.header.stamp    = msg->header.stamp;
   sensorROS.ns              = string("sensor");
-  sensorROS.type            = visualization_msgs::Marker::TEXT_VIEW_FACING;
-  sensorROS.action          = visualization_msgs::Marker::ADD;  
+  sensorROS.type            = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+  sensorROS.action          = visualization_msgs::msg::Marker::ADD;
   sensorROS.pose.position.x = pose(0);
   sensorROS.pose.position.y = pose(1);
   sensorROS.pose.position.z = pose(2) + 1.0;
   sensorROS.pose.orientation.w = q(0);
   sensorROS.pose.orientation.x = q(1);
   sensorROS.pose.orientation.y = q(2);
-  sensorROS.pose.orientation.z = q(3);      
+  sensorROS.pose.orientation.z = q(3);
   string strG = G?string(" GPS "):string("");
   string strV = V?string(" Vision "):string("");
   string strL = L?string(" Laser "):string("");
@@ -312,26 +326,26 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   sensorROS.color.g = 1.0;
   sensorROS.color.b = 1.0;
   sensorROS.scale.z = 0.5;
-  sensorPub.publish(sensorROS);
+  sensorPub->publish(sensorROS);
 
   // Laser height measurement
   double H = msg->twist.covariance[32];
   heightROS.header.frame_id = string("height");
   heightROS.header.stamp = msg->header.stamp;
-  heightROS.radiation_type = sensor_msgs::Range::ULTRASOUND;
+  heightROS.radiation_type = sensor_msgs::msg::Range::ULTRASOUND;
   heightROS.field_of_view = 5.0 * M_PI / 180.0;
   heightROS.min_range = -100;
   heightROS.max_range =  100;
-  heightROS.range     =  H; 
-  heightPub.publish(heightROS);
+  heightROS.range     =  H;
+  heightPub->publish(heightROS);
 
-  // Mesh model                                                  
+  // Mesh model
   meshROS.header.frame_id = _frame_id;
-  meshROS.header.stamp = msg->header.stamp; 
+  meshROS.header.stamp = msg->header.stamp;
   meshROS.ns = "mesh";
   meshROS.id = 0;
-  meshROS.type = visualization_msgs::Marker::MESH_RESOURCE;
-  meshROS.action = visualization_msgs::Marker::ADD;
+  meshROS.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
+  meshROS.action = visualization_msgs::msg::Marker::ADD;
   meshROS.pose.position.x = msg->pose.pose.position.x;
   meshROS.pose.position.y = msg->pose.pose.position.y;
   meshROS.pose.position.z = msg->pose.pose.position.z;
@@ -343,8 +357,8 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   {
     colvec ypr = R_to_ypr(quaternion_to_R(q));
     ypr(0)    += 45.0*PI/180.0;
-    q          = R_to_quaternion(ypr_to_R(ypr)); 
-  }  
+    q          = R_to_quaternion(ypr_to_R(ypr));
+  }
   meshROS.pose.orientation.w = q(0);
   meshROS.pose.orientation.x = q(1);
   meshROS.pose.orientation.y = q(2);
@@ -357,75 +371,93 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   meshROS.color.g = color_g;
   meshROS.color.b = color_b;
   meshROS.mesh_resource = mesh_resource;
-  meshPub.publish(meshROS);                                                  
+  meshPub->publish(meshROS);
 
   // TF for raw sensor visualization
   if (tf45)
   {
-    tf::Transform transform;
-    transform.setOrigin(tf::Vector3(pose(0), pose(1), pose(2)));
-    transform.setRotation(tf::Quaternion(q(1), q(2), q(3), q(0)));
-
-    tf::Transform transform45;
-    transform45.setOrigin(tf::Vector3(0, 0, 0));
-    colvec y45 = zeros<colvec>(3);
-    y45(0) = 45.0 * M_PI/180;
-    colvec q45 = R_to_quaternion(ypr_to_R(y45));  
-    transform45.setRotation(tf::Quaternion(q45(1), q45(2), q45(3), q45(0)));  
-
-    tf::Transform transform90;
-    transform90.setOrigin(tf::Vector3(0, 0, 0));
-    colvec p90 = zeros<colvec>(3);
-    p90(1) = 90.0 * M_PI/180;
-    colvec q90 = R_to_quaternion(ypr_to_R(p90));  
-    transform90.setRotation(tf::Quaternion(q90(1), q90(2), q90(3), q90(0)));  
-
     string base_s   = _drone_id == -1 ? string("base")   : string("base")  +std::to_string(_drone_id);
     string laser_s  = _drone_id == -1 ? string("laser")  : string("laser") +std::to_string(_drone_id);
     string vision_s = _drone_id == -1 ? string("vision") : string("vision")+std::to_string(_drone_id);
     string height_s = _drone_id == -1 ? string("height") : string("height")+std::to_string(_drone_id);
 
+    geometry_msgs::msg::TransformStamped transform;
+    transform.header.stamp = msg->header.stamp;
+    transform.header.frame_id = string("world");
+    transform.child_frame_id = base_s;
+    transform.transform.translation.x = pose(0);
+    transform.transform.translation.y = pose(1);
+    transform.transform.translation.z = pose(2);
+    transform.transform.rotation.w = q(0);
+    transform.transform.rotation.x = q(1);
+    transform.transform.rotation.y = q(2);
+    transform.transform.rotation.z = q(3);
+    broadcaster->sendTransform(transform);
 
-    broadcaster->sendTransform(tf::StampedTransform(transform,   msg->header.stamp, string("world"), base_s));      
-    broadcaster->sendTransform(tf::StampedTransform(transform45, msg->header.stamp, base_s, laser_s));          
-    broadcaster->sendTransform(tf::StampedTransform(transform45, msg->header.stamp, base_s, vision_s));          
-    broadcaster->sendTransform(tf::StampedTransform(transform90, msg->header.stamp, base_s, height_s));          
-  } 
+    colvec y45 = zeros<colvec>(3);
+    y45(0) = 45.0 * M_PI/180;
+    colvec q45 = R_to_quaternion(ypr_to_R(y45));
+    geometry_msgs::msg::TransformStamped transform45;
+    transform45.header.stamp = msg->header.stamp;
+    transform45.header.frame_id = base_s;
+    transform45.child_frame_id = laser_s;
+    transform45.transform.rotation.w = q45(0);
+    transform45.transform.rotation.x = q45(1);
+    transform45.transform.rotation.y = q45(2);
+    transform45.transform.rotation.z = q45(3);
+    broadcaster->sendTransform(transform45);
+
+    transform45.child_frame_id = vision_s;
+    broadcaster->sendTransform(transform45);
+
+    colvec p90 = zeros<colvec>(3);
+    p90(1) = 90.0 * M_PI/180;
+    colvec q90 = R_to_quaternion(ypr_to_R(p90));
+    geometry_msgs::msg::TransformStamped transform90;
+    transform90.header.stamp = msg->header.stamp;
+    transform90.header.frame_id = base_s;
+    transform90.child_frame_id = height_s;
+    transform90.transform.rotation.w = q90(0);
+    transform90.transform.rotation.x = q90(1);
+    transform90.transform.rotation.y = q90(2);
+    transform90.transform.rotation.z = q90(3);
+    broadcaster->sendTransform(transform90);
+  }
 }
 
-void cmd_callback(const quadrotor_msgs::PositionCommand cmd)
-{   
-  if (cmd.header.frame_id == string("null"))
+void cmd_callback(const quadrotor_msgs::msg::PositionCommand::SharedPtr cmd)
+{
+  if (cmd->header.frame_id == string("null"))
     return;
-  
-  colvec pose(6);  
-  pose(0) = cmd.position.x;
-  pose(1) = cmd.position.y;
-  pose(2) = cmd.position.z;
+
+  colvec pose(6);
+  pose(0) = cmd->position.x;
+  pose(1) = cmd->position.y;
+  pose(2) = cmd->position.z;
   colvec q(4);
   q(0)    = 1.0;
   q(1)    = 0.0;
   q(2)    = 0.0;
   q(3)    = 0.0;
   pose.rows(3,5) = R_to_ypr(quaternion_to_R(q));
-  
-  // Mesh model                                                  
+
+  // Mesh model
   meshROS.header.frame_id = _frame_id;
-  meshROS.header.stamp = cmd.header.stamp; 
+  meshROS.header.stamp = cmd->header.stamp;
   meshROS.ns = "mesh";
   meshROS.id = 0;
-  meshROS.type = visualization_msgs::Marker::MESH_RESOURCE;
-  meshROS.action = visualization_msgs::Marker::ADD;
-  meshROS.pose.position.x = cmd.position.x;
-  meshROS.pose.position.y = cmd.position.y;
-  meshROS.pose.position.z = cmd.position.z;
- 
+  meshROS.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
+  meshROS.action = visualization_msgs::msg::Marker::ADD;
+  meshROS.pose.position.x = cmd->position.x;
+  meshROS.pose.position.y = cmd->position.y;
+  meshROS.pose.position.z = cmd->position.z;
+
   if (cross_config)
   {
     colvec ypr = R_to_ypr(quaternion_to_R(q));
     ypr(0)    += 45.0*PI/180.0;
-    q          = R_to_quaternion(ypr_to_R(ypr)); 
-  }  
+    q          = R_to_quaternion(ypr_to_R(ypr));
+  }
   meshROS.pose.orientation.w = q(0);
   meshROS.pose.orientation.x = q(1);
   meshROS.pose.orientation.y = q(2);
@@ -438,46 +470,55 @@ void cmd_callback(const quadrotor_msgs::PositionCommand cmd)
   meshROS.color.g = color_g;
   meshROS.color.b = color_b;
   meshROS.mesh_resource = mesh_resource;
-  meshPub.publish(meshROS);                                                  
+  meshPub->publish(meshROS);
 }
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "odom_visualization");
-  ros::NodeHandle n("~");
+  rclcpp::init(argc, argv);
+  rclcpp::Node::SharedPtr n = rclcpp::Node::make_shared("odom_visualization");
+  node_ = n;
 
-  n.param("mesh_resource", mesh_resource, std::string("package://odom_visualization/meshes/hummingbird.mesh"));
-  n.param("color/r", color_r, 1.0);
-  n.param("color/g", color_g, 0.0);
-  n.param("color/b", color_b, 0.0);
-  n.param("color/a", color_a, 1.0);
-  n.param("origin", origin, false);  
-  n.param("robot_scale", scale, 2.0);    
-  n.param("frame_id",   _frame_id, string("world") ); 
- 
-  n.param("cross_config", cross_config, false);    
-  n.param("tf45", tf45, false);    
-  n.param("covariance_scale",    cov_scale,  100.0);
-  n.param("covariance_position", cov_pos,    false);    
-  n.param("covariance_velocity", cov_vel,    false);    
-  n.param("covariance_color",    cov_color,  false);  
-  n.param("drone_id",   _drone_id, -1);   
-  
-  ros::Subscriber sub_odom = n.subscribe("odom", 100,  odom_callback);
-  ros::Subscriber sub_cmd  = n.subscribe("cmd",  100,  cmd_callback);
-  posePub   = n.advertise<geometry_msgs::PoseStamped>("pose",                100, true);
-  pathPub   = n.advertise<nav_msgs::Path>(            "path",                100, true);
-  velPub    = n.advertise<visualization_msgs::Marker>("velocity",            100, true);
-  covPub    = n.advertise<visualization_msgs::Marker>("covariance",          100, true);
-  covVelPub = n.advertise<visualization_msgs::Marker>("covariance_velocity", 100, true);
-  trajPub   = n.advertise<visualization_msgs::Marker>("trajectory",          100, true);
-  sensorPub = n.advertise<visualization_msgs::Marker>("sensor",              100, true);
-  meshPub   = n.advertise<visualization_msgs::Marker>("robot",               100, true);  
-  heightPub = n.advertise<sensor_msgs::Range>(        "height",              100, true);  
-  tf::TransformBroadcaster b;
+  mesh_resource = get_param(n, "mesh_resource", std::string("package://odom_visualization/meshes/hummingbird.mesh"));
+  color_r = get_param(n, "color.r", 1.0);
+  color_g = get_param(n, "color.g", 0.0);
+  color_b = get_param(n, "color.b", 0.0);
+  color_a = get_param(n, "color.a", 1.0);
+  origin = get_param(n, "origin", false);
+  scale = get_param(n, "robot_scale", 2.0);
+  _frame_id = get_param(n, "frame_id", string("world"));
+
+  cross_config = get_param(n, "cross_config", false);
+  tf45 = get_param(n, "tf45", false);
+  cov_scale = get_param(n, "covariance_scale", 100.0);
+  cov_pos = get_param(n, "covariance_position", false);
+  cov_vel = get_param(n, "covariance_velocity", false);
+  cov_color = get_param(n, "covariance_color", false);
+  _drone_id = get_param(n, "drone_id", -1);
+
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom =
+      n->create_subscription<nav_msgs::msg::Odometry>("odom", 100, odom_callback);
+  rclcpp::Subscription<quadrotor_msgs::msg::PositionCommand>::SharedPtr sub_cmd =
+      n->create_subscription<quadrotor_msgs::msg::PositionCommand>("cmd", 100, cmd_callback);
+
+  // ROS1 latched publishers (advertise(..., true)) → transient_local durability
+  rclcpp::QoS latched_qos(100);
+  latched_qos.transient_local();
+  posePub   = n->create_publisher<geometry_msgs::msg::PoseStamped>("pose",                latched_qos);
+  pathPub   = n->create_publisher<nav_msgs::msg::Path>(            "path",                latched_qos);
+  velPub    = n->create_publisher<visualization_msgs::msg::Marker>("velocity",            latched_qos);
+  covPub    = n->create_publisher<visualization_msgs::msg::Marker>("covariance",          latched_qos);
+  covVelPub = n->create_publisher<visualization_msgs::msg::Marker>("covariance_velocity", latched_qos);
+  trajPub   = n->create_publisher<visualization_msgs::msg::Marker>("trajectory",          latched_qos);
+  sensorPub = n->create_publisher<visualization_msgs::msg::Marker>("sensor",              latched_qos);
+  meshPub   = n->create_publisher<visualization_msgs::msg::Marker>("robot",               latched_qos);
+  heightPub = n->create_publisher<sensor_msgs::msg::Range>(        "height",              latched_qos);
+
+  tf2_ros::TransformBroadcaster b(n);
   broadcaster = &b;
 
-  ros::spin();
+  rclcpp::spin(n);
+  rclcpp::shutdown();
 
   return 0;
 }
