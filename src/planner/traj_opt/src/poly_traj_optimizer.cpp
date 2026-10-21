@@ -38,6 +38,13 @@ namespace ego_planner
       return false;
     }
 
+    // node_ 只在 setParam 里赋值；未初始化就优化会空指针解引用
+    if (!node_)
+    {
+      RCLCPP_ERROR(rclcpp::get_logger("traj_opt"), "setParam not called before OptimizeTrajectory_lbfgs");
+      return false;
+    }
+
     t_now_ = node_->now().seconds();
     piece_num_ = initT.size();
 
