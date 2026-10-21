@@ -4,14 +4,16 @@
 #include <Eigen/Eigen>
 #include <path_searching/dyn_a_star.h>
 #include <plan_env/grid_map.h>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include "optimizer/lbfgs.hpp"
 #include <traj_utils/plan_container.hpp>
-#include <traj_utils/Assignment.h>
+#include <traj_utils/msg/assignment.hpp>
 #include "poly_traj_utils.hpp"
 #include "munkres_algorithm.hpp"
 #include <swarm_graph/swarm_graph.hpp>
 #include <fstream>
+#include <memory>
+#include <string>
 
 namespace ego_planner
 {
@@ -50,8 +52,8 @@ namespace ego_planner
     int iter_num_;         // iteration of the solver
     double min_ellip_dist2_; // min trajectory distance in swarm
 
-    string result_fn_;
-    fstream result_file_;
+    std::string result_fn_;
+    std::fstream result_file_;
 
     double collision_check_time_end_ = 0.0;
 
@@ -87,13 +89,15 @@ namespace ego_planner
 
     double t_now_;
 
+    rclcpp::Node::SharedPtr node_; // set in setParam, provides the clock
+
   public:
 
     PolyTrajOptimizer() {}
     ~PolyTrajOptimizer() {}
 
     /* set variables */
-    void setParam(ros::NodeHandle &nh);
+    void setParam(rclcpp::Node::SharedPtr node);
     void setEnvironment(const GridMap::Ptr &map);
     void setControlPoints(const Eigen::MatrixXd &points);
     void setSwarmTrajs(SwarmTrajData *swarm_trajs_ptr);
@@ -232,7 +236,7 @@ namespace ego_planner
   public:
 
 
-    typedef unique_ptr<PolyTrajOptimizer> Ptr;
+    typedef std::unique_ptr<PolyTrajOptimizer> Ptr;
 
   };
 

@@ -1,5 +1,28 @@
 #include "optimizer/poly_traj_optimizer.h"
-// using namespace std;
+#include <chrono>
+#include <cmath>
+#include <cstring>
+#include <iostream>
+
+// rclcpp 头不像 ROS1 的 ros/ros.h 那样间接引入全部 STL 名字，
+// 这里补上原代码（未加 std:: 前缀）直接用到的几个
+using std::vector;
+using std::cout;
+using std::endl;
+
+// ROS1 ros::Time profiling replaced with std::chrono (non-functional change)
+using Clock = std::chrono::steady_clock;
+
+// get_param helper（参数名中的 / 已按迁移规则改为 .）
+template <typename T>
+T get_param(rclcpp::Node::SharedPtr node, const std::string &name, const T &def)
+{
+  T val = def;
+  if (!node->has_parameter(name))
+    node->declare_parameter<T>(name, def);
+  node->get_parameter(name, val);
+  return val;
+}
 
 namespace ego_planner
 {
@@ -11,11 +34,11 @@ namespace ego_planner
   {
     if (initInnerPts.cols() != (initT.size() - 1))
     {
-      ROS_ERROR("initInnerPts.cols() != (initT.size()-1)");
+      RCLCPP_ERROR(rclcpp::get_logger("traj_opt"), "initInnerPts.cols() != (initT.size()-1)");
       return false;
     }
 
-    t_now_ = ros::Time::now().toSec();
+    t_now_ = node_->now().seconds();
     piece_num_ = initT.size();
 
     jerkOpt_.reset(iniState, finState, piece_num_);
@@ -24,7 +47,7 @@ namespace ego_planner
     double final_cost;
     variable_num_ = 4 * (piece_num_ - 1) + 1;
 
-    ros::Time t0 = ros::Time::now(), t1, t2;
+    Clock::time_point t0 = Clock::now(), t1, t2;
     int restart_nums = 0, rebound_times = 0;
     bool flag_force_return, flag_still_occ;
     bool use_formation_temp = use_formation_;
@@ -61,7 +84,7 @@ namespace ego_planner
     flag_still_occ = false;
     /* ---------- optimize ---------- */
 
-    t1 = ros::Time::now();
+    t1 = Clock::now();
 
     int result = lbfgs::lbfgs_optimize(
         variable_num_,
@@ -79,9 +102,9 @@ namespace ego_planner
 
     use_formation_ = use_formation_temp;
 
-    t2 = ros::Time::now();
-    double time_ms = (t2 - t1).toSec() * 1000;
-    double total_time_ms = (t2 - t0).toSec() * 1000;
+    t2 = Clock::now();
+    double time_ms = std::chrono::duration<double>(t2 - t1).count() * 1000;
+    double total_time_ms = std::chrono::duration<double>(t2 - t0).count() * 1000;
 
     printf("\033[32miter=%d, use_formation=%d, time(ms)=%5.3f, \n\033[0m", iter_num_, use_formation, time_ms);
     // ROS_WARN("The optimization result is : %s", lbfgs::lbfgs_strerror(result));
@@ -734,21 +757,22 @@ namespace ego_planner
   }
 
   /* helper functions */
-  void PolyTrajOptimizer::setParam(ros::NodeHandle &nh)
+  void PolyTrajOptimizer::setParam(rclcpp::Node::SharedPtr node)
   {
-    nh.param("optimization/constrain_points_perPiece", cps_num_prePiece_, -1);
-    nh.param("optimization/weight_obstacle", wei_obs_, -1.0);
-    nh.param("optimization/weight_swarm", wei_swarm_, -1.0);
-    nh.param("optimization/weight_feasibility", wei_feas_, -1.0);
-    nh.param("optimization/weight_sqrvariance", wei_sqrvar_, -1.0);
-    nh.param("optimization/weight_time", wei_time_, -1.0);
-    nh.param("optimization/weight_formation", wei_formation_, -1.0);
+    node_ = node;
+    cps_num_prePiece_ = get_param(node, "optimization.constrain_points_perPiece", -1);
+    wei_obs_ = get_param(node, "optimization.weight_obstacle", -1.0);
+    wei_swarm_ = get_param(node, "optimization.weight_swarm", -1.0);
+    wei_feas_ = get_param(node, "optimization.weight_feasibility", -1.0);
+    wei_sqrvar_ = get_param(node, "optimization.weight_sqrvariance", -1.0);
+    wei_time_ = get_param(node, "optimization.weight_time", -1.0);
+    wei_formation_ = get_param(node, "optimization.weight_formation", -1.0);
 
-    nh.param("optimization/obstacle_clearance", obs_clearance_, -1.0);
-    nh.param("optimization/swarm_clearance", swarm_clearance_, -1.0);
-    nh.param("optimization/formation_type", formation_type_, -1);
-    nh.param("optimization/max_vel", max_vel_, -1.0);
-    nh.param("optimization/max_acc", max_acc_, -1.0);
+    obs_clearance_ = get_param(node, "optimization.obstacle_clearance", -1.0);
+    swarm_clearance_ = get_param(node, "optimization.swarm_clearance", -1.0);
+    formation_type_ = get_param(node, "optimization.formation_type", -1);
+    max_vel_ = get_param(node, "optimization.max_vel", -1.0);
+    max_acc_ = get_param(node, "optimization.max_acc", -1.0);
 
     // set the formation type
     swarm_graph_.reset(new SwarmGraph);
