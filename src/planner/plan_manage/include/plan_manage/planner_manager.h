@@ -71,8 +71,9 @@ namespace ego_planner
     PolyTrajOptimizer::Ptr ploy_traj_opt_;
 
     bool start_flag_, reach_flag_;
-    // RCL_ROS_TIME 基准（与 node_->now() 同源），避免不同时钟类型相减抛异常
-    rclcpp::Time global_start_time_{0, 0};
+    // 与 node_->now() 同源（双整数构造默认 SYSTEM_TIME，须显式 RCL_ROS_TIME），
+    // 避免不同时钟类型相减抛 "can't subtract times with different time sources"
+    rclcpp::Time global_start_time_{0, 0, RCL_ROS_TIME};
     double start_time_, reach_time_, average_plan_time_;
 
   private:

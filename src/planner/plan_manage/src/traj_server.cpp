@@ -32,7 +32,7 @@ double vel_gain[3] = {0, 0, 0};
 bool receive_traj_ = false;
 std::shared_ptr<poly_traj::Trajectory> traj_;
 double traj_duration_;
-rclcpp::Time start_time_{0, 0}; // RCL_ROS_TIME，与 node_->now() 同源可作差
+rclcpp::Time start_time_{0, 0, RCL_ROS_TIME}; // 与 node_->now() 同源可作差（双整数构造默认 SYSTEM_TIME，须显式指定）
 int traj_id_;
 
 // yaw control
@@ -43,7 +43,7 @@ Eigen::Vector3d last_vel(Eigen::Vector3d::Zero()), last_acc(Eigen::Vector3d::Zer
 bool flag = false;
 double jerk2_inter = 0, acc2_inter = 0;
 int cnt = 0;
-rclcpp::Time global_start_time{0, 0}; // RCL_ROS_TIME，与 node_->now() 同源可作差
+rclcpp::Time global_start_time{0, 0, RCL_ROS_TIME}; // 与 node_->now() 同源可作差（双整数构造默认 SYSTEM_TIME，须显式指定）
 int drone_id_;
 std::string result_dir = "/home/zuzu/Documents/report/";
 std::fstream result_file;
