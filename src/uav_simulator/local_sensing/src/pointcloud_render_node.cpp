@@ -196,6 +196,17 @@ int main(int argc, char** argv) {
   pub_cloud = nh->create_publisher<sensor_msgs::msg::PointCloud2>(
       "pcl_render_node/cloud", 10);
 
+  // ROS1 里 sensing_rate 未设置时为零初始化 double，1.0/0.0 = inf 传给
+  // ros::Duration 不致命；rclcpp 的 create_wall_timer 会因 inf 周期抛
+  // std::invalid_argument，故显式校验（参数默认值保持 0.0 不变）
+  if (sensing_rate <= 0.0) {
+    RCLCPP_FATAL(nh->get_logger(),
+                 "Invalid sensing_rate (%.2f); set it via launch/params",
+                 sensing_rate);
+    rclcpp::shutdown();
+    return 1;
+  }
+
   double sensing_duration = 1.0 / sensing_rate * 2.5;
 
   local_sensing_timer = nh->create_wall_timer(
