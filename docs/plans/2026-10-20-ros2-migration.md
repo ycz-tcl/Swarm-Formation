@@ -55,6 +55,8 @@
 | latch publisher | `rclcpp::QoS(n).transient_local()` |
 
 **QoS 契约（Task 5 审查确立）**：plan_env 的订阅全部为 reliable（对齐 ROS1 TCPROS）。**Task 9/10/12 的发布者（depth/odom/cloud 等传感话题）必须用默认 reliable QoS**——DDS 中 reliable 订阅者与 best-effort 发布者不兼容（静默零投递）。勿用 `rmw_qos_profile_sensor_data`。
+**时钟契约（Task 15 冒烟实证，2026-10-21）**：Humble `rclcpp::Time` 双整数构造 `Time(sec, nsec)` 与纳秒构造默认 **RCL_SYSTEM_TIME**（time.hpp:46/:54）；只有 msg 构造 `Time(builtin_interfaces::Time)` 默认 RCL_ROS_TIME（:69）。任何会与 `node_->now()` 作差的 Time 成员，初始化必须显式第三参 `RCL_ROS_TIME`（正例 grid_map.cpp:192；违背例=traj_server:46/planner_manager.h:75 于 Task 15 修复）。
+**目标话题契约（Task 15 冒烟实证）**：默认配置 `fsm.flight_type=3`（SWARM_MANUAL_TARGET）下 FSM 只订阅 **`/move_base_simple/goal`**（ego_replan_fsm.cpp:141）；`/goal` 仅 flight_type=1 订阅。GUI/CLI 发目标必须发前者。
 **执行器契约**：GridMap 回调无内部锁（与 ROS1 单线程 spinner 等价），Task 8 的 ego_planner_node 必须用单线程 `rclcpp::spin`，不可用 MultiThreadedExecutor。
 
 ### 参数 helper（每个节点 cpp 顶部内联一份，不改共享库结构）
