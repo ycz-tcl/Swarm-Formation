@@ -4,10 +4,10 @@
 #include <stdlib.h>
 
 #include <optimizer/poly_traj_optimizer.h>
-#include <traj_utils/DataDisp.h>
+#include <traj_utils/msg/data_disp.hpp>
 #include <plan_env/grid_map.h>
 #include <traj_utils/plan_container.hpp>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <traj_utils/planning_visualization.h>
 #include <optimizer/poly_traj_utils.hpp>
 
@@ -21,32 +21,32 @@ namespace ego_planner
   {
     // SECTION stable
   public:
-  
+
     EGOPlannerManager();
     ~EGOPlannerManager();
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    
+
     /* main planning interface */
     bool reboundReplan(
-        const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc, 
-        const double trajectory_start_time, const Eigen::Vector3d &end_pt, const Eigen::Vector3d &end_vel, 
+        const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
+        const double trajectory_start_time, const Eigen::Vector3d &end_pt, const Eigen::Vector3d &end_vel,
         const bool flag_polyInit, const bool flag_randomPolyTraj,
         const bool use_formation, const bool have_local_traj);
     bool computeInitReferenceState(
-        const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel, 
+        const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel,
         const Eigen::Vector3d &start_acc, const Eigen::Vector3d &local_target_pt,
         const Eigen::Vector3d &local_target_vel, const double &ts, poly_traj::MinJerkOpt &initMJO,
         const bool flag_polyInit);
     bool planGlobalTrajWaypoints(
-        const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, 
-        const Eigen::Vector3d &start_acc, const std::vector<Eigen::Vector3d> &waypoints, 
+        const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel,
+        const Eigen::Vector3d &start_acc, const std::vector<Eigen::Vector3d> &waypoints,
         const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc);
     void getLocalTarget(
         const double planning_horizen,
         const Eigen::Vector3d &start_pt, const Eigen::Vector3d &global_end_pt,
         Eigen::Vector3d &local_target_pos, Eigen::Vector3d &local_target_vel);
-    void initPlanModules(ros::NodeHandle &nh, PlanningVisualization::Ptr vis = NULL);
+    void initPlanModules(const rclcpp::Node::SharedPtr &nh, PlanningVisualization::Ptr vis = NULL);
     bool EmergencyStop(Eigen::Vector3d stop_pos);
 
     void deliverTrajToOptimizer(void) { ploy_traj_opt_->setSwarmTrajs(&traj_.swarm_traj); };
@@ -65,17 +65,19 @@ namespace ego_planner
     GridMap::Ptr grid_map_;
     // SwarmTrajData swarm_trajs_;
     TrajContainer traj_;
-    
+
     // ros::Publisher obj_pub_; //zx-todo
 
     PolyTrajOptimizer::Ptr ploy_traj_opt_;
 
     bool start_flag_, reach_flag_;
-    ros::Time global_start_time_;
+    // RCL_ROS_TIME 基准（与 node_->now() 同源），避免不同时钟类型相减抛异常
+    rclcpp::Time global_start_time_{0, 0};
     double start_time_, reach_time_, average_plan_time_;
 
   private:
     /* main planning algorithms & modules */
+    rclcpp::Node::SharedPtr node_; // ROS1 里用 ros::Time::now()，现由节点时钟提供
     PlanningVisualization::Ptr visualization_;
 
     int continous_failures_count_{0};

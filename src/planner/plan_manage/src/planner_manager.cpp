@@ -1,7 +1,18 @@
 // #include <fstream>
 #include <plan_manage/planner_manager.h>
 #include <thread>
-#include "visualization_msgs/Marker.h" // zx-todo
+#include "visualization_msgs/msg/marker.hpp" // zx-todo
+
+// ROS1: node_.param< T >("a/b", v, def) — ROS2: declare-then-get helper, name '/'→'.'
+template <typename T>
+T get_param(rclcpp::Node::SharedPtr node, const std::string &name, const T &def)
+{
+  T val = def;
+  if (!node->has_parameter(name))
+    node->declare_parameter<T>(name, def);
+  node->get_parameter(name, val);
+  return val;
+}
 
 namespace ego_planner
 {
@@ -15,23 +26,27 @@ namespace ego_planner
     std::cout << "des manager" << std::endl;
   }
 
-  void EGOPlannerManager::initPlanModules(ros::NodeHandle &nh, PlanningVisualization::Ptr vis)
+  void EGOPlannerManager::initPlanModules(const rclcpp::Node::SharedPtr &nh, PlanningVisualization::Ptr vis)
   {
+    node_ = nh;
+
     /* read algorithm parameters */
 
-    nh.param("manager/max_vel", pp_.max_vel_, -1.0);
-    nh.param("manager/max_acc", pp_.max_acc_, -1.0);
-    nh.param("manager/feasibility_tolerance", pp_.feasibility_tolerance_, 0.0);
-    nh.param("manager/control_points_distance", pp_.ctrl_pt_dist, -1.0);
-    nh.param("manager/polyTraj_piece_length", pp_.polyTraj_piece_length, -1.0);
-    nh.param("manager/planning_horizon", pp_.planning_horizen_, 5.0);
-    nh.param("manager/use_distinctive_trajs", pp_.use_distinctive_trajs, false);
-    nh.param("manager/drone_id", pp_.drone_id, -1);
+    pp_.max_vel_ = get_param(nh, "manager.max_vel", -1.0);
+    pp_.max_acc_ = get_param(nh, "manager.max_acc", -1.0);
+    pp_.feasibility_tolerance_ = get_param(nh, "manager.feasibility_tolerance", 0.0);
+    pp_.ctrl_pt_dist = get_param(nh, "manager.control_points_distance", -1.0);
+    pp_.polyTraj_piece_length = get_param(nh, "manager.polyTraj_piece_length", -1.0);
+    pp_.planning_horizen_ = get_param(nh, "manager.planning_horizon", 5.0);
+    pp_.use_distinctive_trajs = get_param(nh, "manager.use_distinctive_trajs", false);
+    pp_.drone_id = get_param(nh, "manager.drone_id", -1);
 
     grid_map_.reset(new GridMap);
     grid_map_->initMap(nh);
 
     ploy_traj_opt_.reset(new PolyTrajOptimizer);
+    // 契约：setParam 先于任何 replan 回调完成（沿 ROS1 init 流程），
+    // 否则 OptimizeTrajectory_lbfgs 首行 node_->now() 为空指针解引用
     ploy_traj_opt_->setParam(nh);
     ploy_traj_opt_->setEnvironment(grid_map_);
 
@@ -89,12 +104,12 @@ namespace ego_planner
     {
       if (traj_.global_traj.last_glb_t_of_lc_tgt < 0.0)
       {
-        ROS_ERROR("You are initialzing a trajectory from a previous optimal trajectory, but no previous trajectories up to now.");
+        RCLCPP_ERROR(node_->get_logger(), "You are initialzing a trajectory from a previous optimal trajectory, but no previous trajectories up to now.");
         return false;
       }
 
       /* the trajectory time system is a little bit complicated... */
-      double passed_t_on_lctraj = ros::Time::now().toSec() - traj_.local_traj.start_time;
+      double passed_t_on_lctraj = node_->now().seconds() - traj_.local_traj.start_time;
       double t_to_lc_end = traj_.local_traj.duration - passed_t_on_lctraj;
       double t_to_lc_tgt = t_to_lc_end +
                            (traj_.global_traj.glb_t_of_lc_tgt - traj_.global_traj.last_glb_t_of_lc_tgt);
@@ -122,7 +137,7 @@ namespace ego_planner
         }
         else
         {
-          ROS_ERROR("Should not happen! x_x 0x88");
+          RCLCPP_ERROR(node_->get_logger(), "Should not happen! x_x 0x88");
         }
 
         t += piece_dur_vec(i + 1);
@@ -193,13 +208,14 @@ namespace ego_planner
       cout << "Close to goal" << endl;
     }
 
-    ros::Time t_start = ros::Time::now();
-    ros::Duration t_init, t_opt;
+    // ROS1: ros::Time t_start / ros::Duration t_init, t_opt — 计时改用 double
+    double t_start = node_->now().seconds();
+    double t_init, t_opt;
 
     /*** STEP 1: INIT ***/
     double ts = pp_.polyTraj_piece_length / pp_.max_vel_;
 
-   
+
     poly_traj::MinJerkOpt initMJO;
     if (!computeInitReferenceState(start_pt, start_vel, start_acc,
                                    local_target_pt, local_target_vel,
@@ -212,14 +228,14 @@ namespace ego_planner
     Eigen::MatrixXd cstr_pts = initMJO.getInitConstrainPoints(ploy_traj_opt_->get_cps_num_prePiece_());
     ploy_traj_opt_->setControlPoints(cstr_pts);
 
-    t_init = ros::Time::now() - t_start;
+    t_init = node_->now().seconds() - t_start;
 
     std::vector<Eigen::Vector3d> point_set;
     for (int i = 0; i < cstr_pts.cols(); ++i)
       point_set.push_back(cstr_pts.col(i));
     visualization_->displayInitPathList(point_set, 0.2, 0);
 
-    t_start = ros::Time::now();
+    t_start = node_->now().seconds();
 
     /*** STEP 2: OPTIMIZE ***/
     bool flag_success = false;
@@ -235,8 +251,8 @@ namespace ego_planner
     flag_success = ploy_traj_opt_->OptimizeTrajectory_lbfgs(headState, tailState,
                                                             innerPts, initTraj.getDurations(),
                                                             cstr_pts, use_formation);
- 
-    t_opt = ros::Time::now() - t_start;
+
+    t_opt = node_->now().seconds() - t_start;
 
     if (!flag_success)
     {
@@ -247,25 +263,25 @@ namespace ego_planner
 
     static double sum_time = 0;
     static int count_success = 0;
-    sum_time += (t_init + t_opt).toSec();
+    sum_time += t_init + t_opt;
     count_success++;
-    cout << "total time:\033[42m" << (t_init + t_opt).toSec()
-         << "\033[0m,init:" << t_init.toSec()
-         << ",optimize:" << t_opt.toSec()
+    cout << "total time:\033[42m" << (t_init + t_opt)
+         << "\033[0m,init:" << t_init
+         << ",optimize:" << t_opt
          << ",avg_time=" << sum_time / count_success
          << ",count_success= " << count_success << endl;
     average_plan_time_ = sum_time / count_success;
 
     if (have_local_traj && use_formation)
     {
-      double delta_replan_time = trajectory_start_time - ros::Time::now().toSec();
+      double delta_replan_time = trajectory_start_time - node_->now().seconds();
       if (delta_replan_time > 0)
-        ros::Duration(delta_replan_time).sleep();
+        rclcpp::sleep_for(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(delta_replan_time)));
       traj_.setLocalTraj(ploy_traj_opt_->getMinJerkOptPtr()->getTraj(), trajectory_start_time);
     }
     else
     {
-      traj_.setLocalTraj(ploy_traj_opt_->getMinJerkOptPtr()->getTraj(), ros::Time::now().toSec()); // todo time
+      traj_.setLocalTraj(ploy_traj_opt_->getMinJerkOptPtr()->getTraj(), node_->now().seconds()); // todo time
     }
 
     visualization_->displayOptimalList(cstr_pts, 0);
@@ -285,7 +301,7 @@ namespace ego_planner
     stopMJO.reset(headState, tailState, 2);
     stopMJO.generate(stop_pos, Eigen::Vector2d(1.0, 1.0));
 
-    traj_.setLocalTraj(stopMJO.getTraj(), ros::Time::now().toSec());
+    traj_.setLocalTraj(stopMJO.getTraj(), node_->now().seconds());
 
     return true;
   }
@@ -336,7 +352,7 @@ namespace ego_planner
     {
       if (innerPts.size() != 0)
       {
-        ROS_ERROR("innerPts.size() != 0");
+        RCLCPP_ERROR(node_->get_logger(), "innerPts.size() != 0");
       }
     }
     globalMJO.reset(headState, tailState, waypoints.size());
@@ -360,8 +376,7 @@ namespace ego_planner
       try_num++;
     } while (globalMJO.getTraj().getMaxVelRate() > pp_.max_vel_ && try_num <= 5);
 
-    auto time_now = ros::Time::now();
-    traj_.setGlobalTraj(globalMJO.getTraj(), time_now.toSec());
+    traj_.setGlobalTraj(globalMJO.getTraj(), node_->now().seconds());
 
     return true;
   }

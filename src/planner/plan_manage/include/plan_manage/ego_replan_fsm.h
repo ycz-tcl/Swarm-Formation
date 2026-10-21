@@ -4,22 +4,22 @@
 #include <Eigen/Eigen>
 #include <algorithm>
 #include <iostream>
-#include <nav_msgs/Path.h>
-#include <sensor_msgs/Imu.h>
-#include <ros/ros.h>
-#include <std_msgs/Empty.h>
-#include <std_msgs/Bool.h>
+#include <nav_msgs/msg/path.hpp>
+#include <sensor_msgs/msg/imu.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/empty.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <vector>
-#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/msg/marker.hpp>
 
 #include <optimizer/poly_traj_optimizer.h>
 #include <plan_env/grid_map.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <traj_utils/DataDisp.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <traj_utils/msg/data_disp.hpp>
 #include <plan_manage/planner_manager.h>
 #include <traj_utils/planning_visualization.h>
-#include <traj_utils/PolyTraj.h>
-#include <traj_utils/Assignment.h>
+#include <traj_utils/msg/poly_traj.hpp>
+#include <traj_utils/msg/assignment.hpp>
 
 #include <fstream>
 #include <iostream>
@@ -47,13 +47,13 @@ namespace ego_planner
     {
       MANUAL_TARGET = 1,
       PRESET_TARGET ,
-      SWARM_MANUAL_TARGET 
+      SWARM_MANUAL_TARGET
     };
-    
+
     /* planning utils */
     EGOPlannerManager::Ptr planner_manager_;
     PlanningVisualization::Ptr visualization_;
-    traj_utils::DataDisp data_disp_;
+    traj_utils::msg::DataDisp data_disp_;
 
     /* parameters */
     int target_type_; // 1 mannual select, 2 hard code
@@ -93,14 +93,19 @@ namespace ego_planner
     GlobalTrajData frontend_traj_;
 
     /* ROS utils */
-    ros::NodeHandle node_;
-    ros::Timer exec_timer_, safety_timer_;
-    ros::Subscriber waypoint_sub_, odom_sub_, swarm_trajs_sub_, broadcast_bspline_sub_, trigger_sub_, assignment_sub_;
-    ros::Publisher replan_pub_, new_pub_, poly_traj_pub_, data_disp_pub_, swarm_trajs_pub_, broadcast_bspline_pub_;
-    ros::Publisher broadcast_ploytraj_pub_;
-    ros::Publisher reached_pub_, start_pub_;
-    ros::Subscriber central_goal;
-    ros::Subscriber broadcast_ploytraj_sub_;
+    rclcpp::Node::SharedPtr node_;
+    rclcpp::TimerBase::SharedPtr exec_timer_, safety_timer_;
+    // ROS1 的 ros::Subscriber 不带类型；ROS2 按各自消息类型拆分声明
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_sub_, trigger_sub_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+    rclcpp::Subscription<traj_utils::msg::PolyTraj>::SharedPtr swarm_trajs_sub_, broadcast_bspline_sub_;
+    rclcpp::Subscription<traj_utils::msg::Assignment>::SharedPtr assignment_sub_;
+    rclcpp::Publisher<traj_utils::msg::PolyTraj>::SharedPtr replan_pub_, new_pub_, poly_traj_pub_, swarm_trajs_pub_, broadcast_bspline_pub_;
+    rclcpp::Publisher<traj_utils::msg::DataDisp>::SharedPtr data_disp_pub_;
+    rclcpp::Publisher<traj_utils::msg::PolyTraj>::SharedPtr broadcast_ploytraj_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr reached_pub_, start_pub_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr central_goal;
+    rclcpp::Subscription<traj_utils::msg::PolyTraj>::SharedPtr broadcast_ploytraj_sub_;
     // result file and file name
     string result_fn_;
     fstream result_file_;
@@ -109,7 +114,7 @@ namespace ego_planner
     bool callEmergencyStop(Eigen::Vector3d stop_pos);                          // front-end and back-end method
     bool planFromGlobalTraj(const int trial_times = 1);
     bool planFromLocalTraj(bool flag_use_poly_init, bool use_formation);
-    
+
     /* return value: std::pair< Times of the same state be continuously called, current continuously called state > */
     void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
     std::pair<int, EGOReplanFSM::FSM_EXEC_STATE> timesOfConsecutiveStateCalls();
@@ -119,14 +124,14 @@ namespace ego_planner
     // void getLocalTarget();
 
     /* ROS functions */
-    void execFSMCallback(const ros::TimerEvent &e);
-    void checkCollisionCallback(const ros::TimerEvent &e);
-    void waypointCallback(const geometry_msgs::PoseStampedPtr &msg);
-    void triggerCallback(const geometry_msgs::PoseStampedPtr &msg);
-    void odometryCallback(const nav_msgs::OdometryConstPtr &msg);
-    void RecvBroadcastPolyTrajCallback(const traj_utils::PolyTrajConstPtr &msg);
-    void polyTraj2ROSMsg(traj_utils::PolyTraj &msg);
-    void formationWaypointCallback(const geometry_msgs::PoseStampedPtr &msg);
+    void execFSMCallback();
+    void checkCollisionCallback();
+    void waypointCallback(const geometry_msgs::msg::PoseStamped::ConstSharedPtr &msg);
+    void triggerCallback(const geometry_msgs::msg::PoseStamped::ConstSharedPtr &msg);
+    void odometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &msg);
+    void RecvBroadcastPolyTrajCallback(const traj_utils::msg::PolyTraj::ConstSharedPtr &msg);
+    void polyTraj2ROSMsg(traj_utils::msg::PolyTraj &msg);
+    void formationWaypointCallback(const geometry_msgs::msg::PoseStamped::ConstSharedPtr &msg);
     bool frontEndPathSearching();
     bool checkCollision();
 
@@ -137,7 +142,7 @@ namespace ego_planner
     ~EGOReplanFSM();
 
 
-    void init(ros::NodeHandle &nh);
+    void init(const rclcpp::Node::SharedPtr &nh);
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
