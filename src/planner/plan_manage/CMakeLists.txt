@@ -69,6 +69,8 @@ target_link_libraries(traj_server Eigen3::Eigen)
 install(TARGETS ego_planner_node traj_server
   DESTINATION lib/${PROJECT_NAME})
 
-install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+# config/normal_hexagon.yaml 由 launch/advanced_param.py 在运行时按
+# share/<pkg>/config 相对定位（与 launch/ 同级），必须一并安装
+install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
 ament_package()
