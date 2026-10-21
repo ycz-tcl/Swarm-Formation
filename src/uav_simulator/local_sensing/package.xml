@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
-<package>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>local_sensing_node</name>
   <version>0.1.0</version>
   <description>
@@ -9,30 +10,22 @@
   <maintainer email="matia.pizzoli@gmail.com">Matia Pizzoli</maintainer>
   <license>GPLv3</license>
 
-  <!-- Dependencies which this package needs to build itself. -->
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>eigen3_cmake_module</buildtool_depend>
 
-  <!-- Dependencies needed to compile this package. -->
-  <build_depend>cmake_modules</build_depend> <!-- for FindEigen.cmake -->
-  <build_depend>roscpp</build_depend>
-  <build_depend>roslib</build_depend>
-  <build_depend>svo_msgs</build_depend>
-  <build_depend>cv_bridge</build_depend>
-  <build_depend>image_transport</build_depend>
-  <build_depend>vikit_ros</build_depend>
-  <build_depend>pcl_ros</build_depend>
-  <build_depend>dynamic_reconfigure</build_depend>
-  <build_depend>quadrotor_msgs</build_depend>
+  <!-- 非 CUDA 默认路径（pointcloud_render_node.cpp）的依赖 -->
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>pcl_conversions</depend>
+  <depend>eigen</depend>
+  <depend>libpcl-all-dev</depend>
 
-  <!-- Dependencies needed after this package is compiled. -->
-  <run_depend>roscpp</run_depend>
-  <run_depend>roslib</run_depend>
-  <run_depend>svo_msgs</run_depend>
-  <run_depend>cv_bridge</run_depend>
-  <run_depend>image_transport</run_depend>
-  <run_depend>vikit_ros</run_depend>
-  <run_depend>pcl_ros</run_depend>
-  <run_depend>dynamic_reconfigure</run_depend>
-  <run_depend>quadrotor_msgs</run_depend>
+  <!-- ROS1 CUDA-only 依赖（cv_bridge、image_transport、dynamic_reconfigure、
+       quadrotor_msgs、svo_msgs、vikit_ros）未随非 CUDA 路径迁移 -->
 
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>
