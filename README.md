@@ -55,7 +55,7 @@ Then open a new command window in the same workspace and execute the following c
 source install/setup.bash
 ros2 launch ego_planner normal_hexagon.launch.py
 ```
-Then use **"2D Goal Pose"** in rviz2 (remapped to the `/goal` topic) to publish the goal for swarm formation navigation. You need to specify the value of **flight_type** in run_in_sim.launch.py:
+Then use **"2D Goal Pose"** in rviz2 (remapped to the `/move_base_simple/goal` topic) to publish the goal for swarm formation navigation. You need to specify the value of **flight_type** in run_in_sim.launch.py:
 <p align = "center">
 <img src="fig/set_goal_normal_hexagon.gif" width = "800" height = "363" border="2" />
 </p>
@@ -92,10 +92,10 @@ ros2 launch ego_planner normal_hexagon.launch.py
 ```
 
 ## 3. Tips
-1. Besides rviz2, the goal can also be sent from the command line with **flight_type = 3**:
+1. Besides rviz2, the goal can also be sent from the command line with **flight_type = 3** (the FSM subscribes `/move_base_simple/goal` for this mode; `z` in the message is ignored and forced to 0.5):
   ```
   source install/setup.bash
-  ros2 topic pub -1 /goal geometry_msgs/msg/PoseStamped "{header: {frame_id: 'world'}, pose: {position: {x: 0.0, y: 0.0, z: 1.0}, orientation: {w: 1.0}}}"
+  ros2 topic pub -1 /move_base_simple/goal geometry_msgs/msg/PoseStamped "{header: {frame_id: 'world'}, pose: {position: {x: 0.0, y: 0.0, z: 1.0}, orientation: {w: 1.0}}}"
   ```
 2. The workspace is built with **colcon**, and the CMake build type defaults to Release. A specific build type can still be set with:
   ```
