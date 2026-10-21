@@ -43,7 +43,7 @@ Video Links: [Bilibili](https://www.bilibili.com/video/BV1qv41137Si?spm_id_from=
 ## 2. Quick Start within 3 Minutes
 Compiling tests passed on ubuntu 22.04 with ROS 2 Humble installed. You can just execute the following commands one by one.
 ```
-sudo apt-get install libarmadillo-dev
+sudo apt-get install libarmadillo-dev python3-colcon-common-extensions
 git clone https://github.com/ZJU-FAST-Lab/Swarm-Formation.git
 cd Swarm-Formation
 colcon build

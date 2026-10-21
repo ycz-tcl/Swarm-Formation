@@ -4,3 +4,4 @@ devel/
 .worktrees/
 install/
 log/
+__pycache__/
