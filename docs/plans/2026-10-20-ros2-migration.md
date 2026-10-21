@@ -187,6 +187,12 @@ package.xml 骨架（format 3）：`<buildtool_depend>ament_cmake</buildtool_dep
 
 ### Task 8: plan_manage（ego_planner 主包）
 
+> **批次 A 审查确立的下游契约（2026-10-21 补记）**：
+> 1. `poly_traj_optimizer` 的 `node_` 只在 `setParam(rclcpp::Node::SharedPtr)` 赋值，`OptimizeTrajectory_lbfgs` 首行无条件解引用——plan_manage 的 `init()` 必须在任何 replan 回调前调 `ploy_traj_opt_->setParam(node)`（沿 ROS1 init 流程天然满足）。
+> 2. 链接：`ament_target_dependencies(<目标> plan_env path_searching traj_opt traj_utils swarm_graph)` + `target_link_libraries(<目标> Eigen3::Eigen)`；勿显式链 traj_utils 的 C++ 库名（planning_visualization 或裸名）。
+> 3. t_now_ 与 swarm_trajs_ 时间戳同源（同节点/同时钟配置）；demo 无 /clock 不设 use_sim_time 即等价。
+> 4. path_searching/traj_opt 的库目标名保持原名，export 完整（含传递 PCL）。
+
 **Files:**
 - Rewrite: `package.xml`、`CMakeLists.txt`
 - Modify: `src/ego_planner_node.cpp`（22 行主入口）、`src/ego_replan_fsm.cpp`（837 行）、`src/planner_manager.cpp`、`src/traj_server.cpp`（343 行）
