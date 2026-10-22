@@ -111,6 +111,7 @@ ros2 launch ego_planner normal_hexagon.launch.py
 - [GCOPTER](https://github.com/ZJU-FAST-Lab/GCOPTER): An efficient and versatile multicopter trajectory optimizer built upon a novel sparse trajectory representation named [MINCO](https://arxiv.org/pdf/2103.00190v2.pdf).
 - [LBFGS-Lite](https://github.com/ZJU-FAST-Lab/LBFGS-Lite): An Easy-to-Use Header-Only L-BFGS Solver.
 - [EGO-Swarm](https://github.com/ZJU-FAST-Lab/ego-planner-swarm): A Fully Autonomous and Decentralized Quadrotor Swarm System in Cluttered Environments.
+- [Swarm of micro flying robots in the wild](https://www.science.org/doi/10.1126/scirobotics.abm5954): A decentralized palm-sized aerial swarm navigating autonomously in the wild (Science Robotics 2022). Its bilingual (zh-CN) supplementary material is archived at [docs/paper/scirobotics.abm5954_sm.zh-CN.dual.pdf](docs/paper/scirobotics.abm5954_sm.zh-CN.dual.pdf).
 
 ## 6. Licence
 The source code is released under [GPLv3](https://www.gnu.org/licenses/) license.
