@@ -364,7 +364,7 @@ namespace ego_planner
 
         if (dist < CLEARANCE)
         {
-          RCLCPP_WARN(node_->get_logger(), "swarm distance between drone %d and drone %d is %f, too close!",
+          RCLCPP_WARN(node_->get_logger(), "swarm distance between drone %d and drone %ld is %f, too close!",
                       planner_manager_->pp_.drone_id, id, dist);
           t_temp = t;
           occ = true;
