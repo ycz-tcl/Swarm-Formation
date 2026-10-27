@@ -51,12 +51,16 @@ def generate_simulator(drone_id,
     }
 
     # <node pkg="odom_visualization" name="drone_X_odom_visualization">
-    # 注：原 XML 'drone_id' 参数为字符串字面量 "drone_id"，ROS1 因类型不匹配
+    # 注 1：原 XML 'drone_id' 参数为字符串字面量 "drone_id"，ROS1 因类型不匹配
     # 静默回退默认值 -1；ROS2 端声明为 int，故传等效值 -1。
+    # 注 2：ROS1 相对话题（robot/path/...）经节点名自动得到 /drone_X_odom_visualization/
+    # 前缀；ROS2 的 __node 重命名不改命名空间，必须显式设 namespace 才能还原该布局，
+    # 否则 7 个实例的 robot/path 全部落在根命名空间互相覆盖（rviz 无模型/路径）。
     odom_visualization = {
         'package': 'odom_visualization',
         'executable': 'odom_visualization',
         'name': 'drone_{}_odom_visualization'.format(drone_id),
+        'namespace': 'drone_{}_odom_visualization'.format(drone_id),
         'output': 'screen',
         'parameters': [{
             'color.a': 1.0,
@@ -69,8 +73,9 @@ def generate_simulator(drone_id,
             'drone_id': -1,
         }],
         'remappings': [
-            # 原 XML 硬编码 visual_slam/odom（未用 $(arg odometry_topic)），保持原样
-            ('odom', 'drone_{}_visual_slam/odom'.format(drone_id)),
+            # 原 XML 硬编码 visual_slam/odom（未用 $(arg odometry_topic)），保持原样。
+            # 目标名必须带前导 '/'：namespace 下相对目标会被解析进本节点命名空间。
+            ('odom', '/drone_{}_visual_slam/odom'.format(drone_id)),
         ],
     }
 

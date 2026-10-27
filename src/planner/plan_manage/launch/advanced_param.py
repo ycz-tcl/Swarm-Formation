@@ -163,6 +163,10 @@ def generate_advanced_param(
         'package': 'ego_planner',
         'executable': 'ego_planner_node',
         'name': 'drone_{}_ego_planner_node'.format(drone_id),
+        # ROS1 相对话题（goal_point/optimal_list/grid_map/esdf...）经节点名得到
+        # /drone_X_ego_planner_node/ 前缀；ROS2 __node 重命名不改命名空间，
+        # 必须显式 namespace 还原（否则 7 机可视化话题全部落在根下互相覆盖）。
+        'namespace': 'drone_{}_ego_planner_node'.format(drone_id),
         'output': 'screen',
         'remappings': remappings,
         'parameters': [parameters],
