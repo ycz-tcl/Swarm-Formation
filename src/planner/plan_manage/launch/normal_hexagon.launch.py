@@ -8,6 +8,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -40,7 +41,18 @@ def generate_launch_description():
         DeclareLaunchArgument('odom_topic', default_value='visual_slam/odom'),
         # formation_type 在原 XML 中声明但未被引用（引用处已注释），保留以完整对应
         DeclareLaunchArgument('formation_type', default_value='1'),
+        # 合并启动 rviz（原 ROS1 上游需另开终端跑 rviz.launch，此处默认一并拉起）。
+        # 关闭 rviz 窗口会终止整个 launch（rviz.launch.py 的 OnProcessExit->Shutdown）。
+        # 无显示环境（headless 冒烟）用 rviz:=false。
+        DeclareLaunchArgument('rviz', default_value='true'),
     ]
+
+    # 可视化（与上游两终端流程等价，合入同一条命令）
+    rviz = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(ego_planner_share, 'launch', 'rviz.launch.py')),
+        condition=IfCondition(LaunchConfiguration('rviz')),
+    )
 
     # swarm topic transmitter bridge
     bridge = IncludeLaunchDescription(
@@ -107,4 +119,5 @@ def generate_launch_description():
         bridge,
         random_forest,
         *drones,
+        rviz,
     ])
